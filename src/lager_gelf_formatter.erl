@@ -18,7 +18,7 @@ format(Message,[{metadata, AdditionalMetaData} | Rest]) ->
     NewMessage = lager_msg:new(Content, Timestamp, Severity, Metadata, Destinations),
     format(NewMessage, Rest);
 format(Message,Config) ->
-    "{" ++ string:join([output(V,Message) || V <- Config], ", ") ++ "}".
+    lists:flatten("{" ++ string:join([output(V,Message) || V <- Config], ", ") ++ "}").
 
 -spec format(lager_msg:lager_msg(),list(), list()) -> any().
 format(Msg, Config, _Color) ->

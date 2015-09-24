@@ -25,7 +25,7 @@ format(Msg, Config, _Color) ->
     format(Msg, Config).
 
 -spec output(term(),lager_msg:lager_msg()) -> iolist().
-output(message,Msg) -> "\"short_message\": \"" ++ lager_msg:message(Msg) ++ "\"";
+output(message,Msg) -> "\"short_message\": \"" ++ re:replace(lager_msg:message(Msg), "\"", "\\\\\\\"", [global, {return, list}]) ++ "\"";
 output(version,_Msg) -> "\"version\": \"1.1\"";
 output(host,_Msg) ->
     {ok, Host} = inet:gethostname(),

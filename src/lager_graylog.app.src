@@ -2,7 +2,7 @@
 {application, lager_graylog,
  [
   {description, "An Erlang lager_graylog library"},
-  {vsn, "1"},
+  {vsn, "0.1.0"},
   {modules, [
              lager_graylog
             ]},
@@ -11,6 +11,10 @@
                   kernel,
                   stdlib
                  ]},
-  {env, []}
+  {env, []},
+  {maintainers, ["esl", "Heinz N. Gies"]},
+  {licenses, ["Other"]},
+  {links,[{"Github",
+           "https://github.com/esl/lager_graylog"}]}
  ]
 }.

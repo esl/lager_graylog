@@ -18,21 +18,21 @@ format(Message,[{metadata, AdditionalMetaData} | Rest]) ->
     NewMessage = lager_msg:new(Content, Timestamp, Severity, Metadata, Destinations),
     format(NewMessage, Rest);
 format(Message,Config) ->
-    lists:flatten("{" ++ string:join([output(V,Message) || V <- Config], ", ") ++ "}").
+    lists:flatten([${, string:join([output(V,Message) || V <- Config], ", "), $}]).
 
 -spec format(lager_msg:lager_msg(),list(), list()) -> any().
 format(Msg, Config, _Color) ->
     format(Msg, Config).
 
 -spec output(term(),lager_msg:lager_msg()) -> iolist().
-output(message,Msg) -> "\"short_message\": \"" ++ re:replace(lager_msg:message(Msg), "\"", "\\\\\\\"", [global, {return, list}]) ++ "\"";
-output(version,_Msg) -> "\"version\": \"1.1\"";
+output(message,Msg) -> [$", "short_message", $", $:, $", re:replace(lager_msg:message(Msg), "\"", "\\\\\\\"", [global, {return, list}]), $"];
+output(version,_Msg) -> [$", "version", $", $:, $", "1.1", $"];
 output(host,_Msg) ->
     {ok, Host} = inet:gethostname(),
     property("host", Host);
 output(timestamp,Msg) ->
     {D, T} = lager_msg:datetime(Msg),
-    property("timestamp", D ++ "T" ++ T);
+    property("timestamp",[D, "T", T]);
 output(level,Msg) ->
     property("level", integer_to_list(lager_msg:severity_as_int(Msg)));
 output(Prop,Msg) when is_atom(Prop) ->
@@ -50,7 +50,7 @@ output(Other,_) -> make_printable(Other).
 %% create string '"key": "value"' from key and value
 -spec property(string(), string()) -> string().
 property(Key, Value) ->
-    "\"" ++ Key ++ "\": \"" ++ Value ++ "\"".
+    [$" , Key , $" , $: , $" , Value , $"].
 
 -spec make_printable(any()) -> iolist().
 make_printable(A) when is_atom(A) -> atom_to_list(A);

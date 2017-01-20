@@ -38,14 +38,38 @@ output(level,Msg) ->
 output(Prop,Msg) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
     Key = make_printable(Prop),
-    Value = make_printable(get_metadata(Prop,Metadata,"Undefined")),
-    property(Key, Value);
+    RawValue = get_metadata(Prop,Metadata,"Undefined"),
+    if
+        is_map(RawValue) ->
+            convert_map(make_printable(Key), RawValue);
+        true ->
+            Value = make_printable(get_metadata(Prop,Metadata,"Undefined")),
+            property(Key, Value)    
+    end;
 output({Prop,Default},Msg) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
     Key = make_printable(Prop),
     Value = make_printable(get_metadata(Prop,Metadata,output(Default,Msg))),
     property(Key, Value);
 output(Other,_) -> make_printable(Other).
+
+%% converts and formats a map into a list with keys and values, prefixes keys with name of original key
+-spec convert_map(term(), map()) -> iolist().
+convert_map(Key, M) ->
+    Fun = fun(K, V, Acc) ->
+        PrefixedKey = [Key, $_, make_printable(K)],
+        if
+            is_map(V) ->
+                E = convert_map(PrefixedKey, V);
+            true ->
+                E = [property(PrefixedKey, make_printable(V))]
+        end,
+        join_lists(E, Acc)
+    end,
+    maps:fold(Fun, [], M).
+
+join_lists(L, []) -> L;
+join_lists(L, A) -> [L, $, , A].
 
 %% create string '"key": "value"' from key and value
 -spec property(string(), string()) -> string().

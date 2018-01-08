@@ -17,14 +17,32 @@
 
 -define(GELF_VERSION, "1.1").
 
+%% API
+
 -spec format(lager_msg:lager_msg(), list()) -> iodata().
-format(Message, _Opts) ->
+format(Message, Opts) ->
     {ok, Host} = inet:gethostname(),
     ShortMessage = lager_msg:message(Message),
     Timestamp = erlang_ts_to_gelf_ts(lager_msg:timestamp(Message)),
     Level = severity_to_int(lager_msg:severity(Message)),
-    Metadata = lager_msg:metadata(Message),
+    Metadata = extract_metadata(lager_msg:metadata(Message), Opts),
     format(Host, ShortMessage, Timestamp, Level, Metadata).
+
+%% Helpers
+
+-spec extract_metadata([kv()], list()) -> [kv()].
+extract_metadata(AllMetadata, Opts) ->
+    case proplists:get_value(metadata, Opts, all) of
+        all ->
+            AllMetadata;
+        Keys when is_list(Keys) ->
+            lists:foldl(fun(K, Acc) ->
+                            case proplists:lookup(K, AllMetadata) of
+                                {K, _} = Tuple -> [Tuple | Acc];
+                                _ -> Acc
+                            end
+                        end, [], Keys)
+    end.
 
 -spec format(string(), list(), float(), severity_int(), [kv()]) -> iodata().
 format(Host, ShortMessage, Timestamp, Level, Metadata) ->

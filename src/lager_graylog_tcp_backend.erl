@@ -18,7 +18,7 @@
                    port          := port_number(),
                    socket        := gen_tcp:socket(),
                    formatter     := module(),
-                   format_config := any()}.
+                   formatter_config := any()}.
 
 %% gen_event callbacks
 
@@ -27,7 +27,7 @@ init(Opts) ->
       host := Host,
       port := Port,
       formatter := Formatter,
-      format_config := FormatConfig} = get_common_config(Opts),
+      formatter_config := FormatterConfig} = get_common_config(Opts),
 
     {ok, Socket} = gen_tcp:connect(Host, Port, [binary, {active, false}]),
 
@@ -38,7 +38,7 @@ init(Opts) ->
               port => Port,
               socket => Socket,
               formatter => Formatter,
-              format_config => FormatConfig},
+              formatter_config => FormatterConfig},
     {ok, State}.
 
 handle_call({set_loglevel, Level}, State) ->
@@ -57,10 +57,10 @@ handle_event({log, Message}, #{name := Name,
                                level := Mask,
                                socket := Socket,
                                formatter := Formatter,
-                               format_config := FormatConfig} = State) ->
+                               formatter_config := FormatterConfig} = State) ->
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
-            FormattedLog = Formatter:format(Message, FormatConfig),
+            FormattedLog = Formatter:format(Message, FormatterConfig),
             ok = gen_tcp:send(Socket, [FormattedLog, 0]);
         false ->
             ok

@@ -33,7 +33,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
          code_change/3]).
 
--record(state, {name, address, port, socket, level, formatter,format_config}).
+-record(state, {name, address, port, socket, level, formatter,formatter_config}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -54,7 +54,7 @@ check_config(_) -> true.
 init(Params)->
     Level        = proplists:get_value(level, Params, debug),
     Formatter    = proplists:get_value(formatter,Params,lager_default_formatter),
-    FormatConfig = proplists:get_value(format_config,Params,[]),
+    FormatterConfig = proplists:get_value(formatter_config,Params,[]),
     InetFamily   = proplists:get_value(inet_family,Params,inet),
 
     Host         = proplists:get_value(host,Params,undefined),
@@ -78,7 +78,7 @@ init(Params)->
         port=Port,
         socket=Socket,
         formatter=Formatter,
-        format_config=FormatConfig}
+        formatter_config=FormatterConfig}
     }.
 
 
@@ -96,9 +96,9 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event(Message,#state{level=L,formatter=Formatter,format_config=FormatConfig} = State) ->
+handle_event(Message,#state{level=L,formatter=Formatter,formatter_config=FormatterConfig} = State) ->
     {log, MessageInner} = Message,
-    Msg=Formatter:format(MessageInner,FormatConfig),
+    Msg=Formatter:format(MessageInner,FormatterConfig),
     ok=gen_udp:send(State#state.socket,State#state.address,State#state.port,Msg),
     {ok, State};
 handle_event(_Event, State) ->
@@ -118,7 +118,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 -ifdef(TEST).
 
--define(TEST_CONFIG(Address,Port),[{level,info},{name,test},{formatter,lager_default_formatter},{format_config,[message]},{host,Address},{port,Port}]).
+-define(TEST_CONFIG(Address,Port),[{level,info},{name,test},{formatter,lager_default_formatter},{formatter_config,[message]},{host,Address},{port,Port}]).
 
 do_init() ->
     % Test pretends to be the server, open a server connection

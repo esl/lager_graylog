@@ -25,7 +25,7 @@ parse_common_opts(Opts) when is_list(Opts) ->
     Host         = proplists:get_value(host, Opts),
     Port         = proplists:get_value(port, Opts),
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
-    FormatConfig = proplists:get_value(format_config, Opts, []),
+    FormatterConfig = proplists:get_value(formatter_config, Opts, []),
 
     case validate_config_values([{level, Level}, {host, Host}, {port, Port}]) of
         ok ->
@@ -33,7 +33,7 @@ parse_common_opts(Opts) when is_list(Opts) ->
                        host => Host,
                        port => Port,
                        formatter => Formatter,
-                       format_config => FormatConfig},
+                       formatter_config => FormatterConfig},
             {ok, Config};
         Error ->
             Error

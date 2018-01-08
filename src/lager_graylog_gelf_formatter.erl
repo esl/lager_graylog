@@ -66,7 +66,7 @@ term_to_bin(Term) when is_binary(Term) -> Term;
 term_to_bin(Term) when is_list(Term) -> list_to_binary(Term);
 term_to_bin(Term) when is_atom(Term) -> atom_to_binary(Term, utf8);
 term_to_bin(Term) when is_integer(Term) -> integer_to_binary(Term);
-term_to_bin(Term) when is_float(Term) -> float_to_binary(Term);
+term_to_bin(Term) when is_float(Term) -> float_to_binary(Term, [{decimals, 6}, compact]);
 term_to_bin(Term) when is_reference(Term) -> list_to_binary(erlang:ref_to_list(Term));
 term_to_bin(Term) when is_port(Term) -> list_to_binary(erlang:port_to_list(Term));
 term_to_bin(Term) when is_pid(Term) -> list_to_binary(pid_to_list(Term)).

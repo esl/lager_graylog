@@ -9,14 +9,19 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
+-define(BACKOFF_START, 1).
+-define(BACKOFF_MAX, 30).
+
 -type host() :: inet:hostname().
 -type port_number() :: inet:port_number().
 -type name() :: {?MODULE, {host(), port_number()}}.
+-type socket() :: disconnected | {connected, gen_tcp:socket()}.
 -type state() :: #{name          := name(),
                    level         := lager_graylog_utils:mask(),
                    host          := host(),
                    port          := port_number(),
                    socket        := gen_tcp:socket(),
+                   backoff       := backoff:backoff(),
                    formatter     := module(),
                    formatter_config := any()}.
 
@@ -29,17 +34,17 @@ init(Opts) ->
       formatter := Formatter,
       formatter_config := FormatterConfig} = get_common_config(Opts),
 
-    {ok, Socket} = gen_tcp:connect(Host, Port, [binary, {active, false}]),
 
     {ok, Mask} = lager_graylog_utils:validate_loglevel(Level),
     State = #{name => {?MODULE, {Host, Port}},
               level => Mask,
               host => Host,
               port => Port,
-              socket => Socket,
+              socket => disconnected,
+              backoff => backoff:type(backoff:init(?BACKOFF_START, ?BACKOFF_MAX), jitter),
               formatter => Formatter,
               formatter_config => FormatterConfig},
-    {ok, State}.
+    {ok, try_connect(State)}.
 
 handle_call({set_loglevel, Level}, State) ->
     case lager_graylog_utils:validate_loglevel(Level) of
@@ -55,20 +60,30 @@ handle_call(_Request, State) ->
 
 handle_event({log, Message}, #{name := Name,
                                level := Mask,
-                               socket := Socket,
+                               socket := {connected, Socket},
                                formatter := Formatter,
                                formatter_config := FormatterConfig} = State) ->
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
             FormattedLog = Formatter:format(Message, FormatterConfig),
-            ok = gen_tcp:send(Socket, [FormattedLog, 0]);
+            case gen_tcp:send(Socket, [FormattedLog, 0]) of
+                ok ->
+                    {ok, State};
+                {error, Reason} ->
+                    io:format("Couldn't send log message: ~p~n", [Reason]),
+                    {ok, try_connect(State#{socket := disconnected})}
+            end;
         false ->
-            ok
-    end,
+            {ok, State}
+    end;
+handle_event({log, _}, #{socket := disconnected} = State) ->
     {ok, State}.
 
-handle_info(Info, State) ->
-    {ok, State}.
+handle_info({tcp_closed, _Socket}, #{socket := {connected, _Socket}} = State) ->
+    io:format("Connection closed by peer~n"),
+    {ok, try_connect(State#{socket := disconnected})};
+handle_info({timeout, _, reconnect}, #{socket := disconnected} = State) ->
+    {ok, try_connect(State)}.
 
 terminate(_Arg, _State) ->
     ok.
@@ -86,4 +101,23 @@ get_common_config(Opts) ->
         Error ->
             exit(Error)
     end.
+
+-spec try_connect(state()) -> state().
+try_connect(#{socket := disconnected, host := Host, port := Port, backoff := Backoff} = State) ->
+    case gen_tcp:connect(Host, Port, [binary, {active, false}]) of
+        {ok, Socket} ->
+            {_, NewBackoff} = backoff:succeed(Backoff),
+            io:format("Connected to ~p:~p~n", [Host, Port]),
+            State#{backoff := NewBackoff, socket := {connected, Socket}};
+        {error, Reason} ->
+            {ReconnectIn, NewBackoff} = backoff:fail(Backoff),
+            set_reconnection_timer(ReconnectIn),
+            io:format("Could not connect to ~p:~p: ~p. Retrying in ~ps~n",
+                                   [Host, Port, Reason, ReconnectIn]),
+            State#{backoff := NewBackoff}
+    end.
+
+-spec set_reconnection_timer(non_neg_integer()) -> ok.
+set_reconnection_timer(ReconnectInSeconds) ->
+    erlang:start_timer(ReconnectInSeconds * 1000, self(), reconnect).
 

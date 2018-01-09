@@ -51,7 +51,9 @@ The formatter expects configuration as a list of tuples with atom keys. The foll
 supported (all of them are optional):
 * `metadata` (default: `all`) - filters which metadata will be added to the message. You can provide
   `all` atom, which will instruct the formatter to include all metadata, or the list of keys
-  (e.g. `[line, file]`) which must be included
+  (e.g. `[line, file]`) which must be included, or the `{module, function}` tuple. The function
+  should take `lager_msg:lager_msg()` record as argument and return list of metadata tuples which
+  will be included in the payload
 * `include_default_ts` (default: `true`) - instructs the formatter to include the `"timestamp"` field
   containing the timestamp in seconds with 6 decimal places. Note that Graylog will generate timestamp
   itself when this field is not present in the payload

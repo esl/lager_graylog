@@ -11,7 +11,8 @@ all() ->
      formats_all_metadata_by_default,
      formats_only_selected_metadata,
      formats_all_metadata_if_configured,
-     doesnt_format_default_timestamp_if_configured
+     doesnt_format_default_timestamp_if_configured,
+	 formats_metadata_using_configured_function
     ].
 
 %% Test cases
@@ -70,6 +71,18 @@ doesnt_format_default_timestamp_if_configured(_Config) ->
 
     Gelf = decode(Formatted),
     ?assertNot(maps:is_key(<<"timestamp">>, Gelf)).
+
+formats_metadata_using_configured_function(_Config) ->
+    Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
+    Opts = [{metadata, {?MODULE, metadata_fun}}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(<<"sample">>, maps:get(<<"_meta">>, Gelf)).
+
+metadata_fun(_) ->
+    [{meta, "sample"}].
 
 %% Helpers
 

@@ -24,7 +24,7 @@ format(Message, Opts) ->
     {ok, Host} = inet:gethostname(),
     ShortMessage = lager_msg:message(Message),
     Level = severity_to_int(lager_msg:severity(Message)),
-    Metadata = extract_metadata(lager_msg:metadata(Message), Opts),
+    Metadata = extract_metadata(Message, Opts),
     Props0 = [{<<"version">>, ?GELF_VERSION},
               {<<"host">>, Host},
               {<<"short_message">>, ShortMessage},
@@ -42,11 +42,14 @@ timestamp_prop(Timestamp, Opts) ->
        false -> []
     end.
 
--spec extract_metadata([kv()], list()) -> [kv()].
-extract_metadata(AllMetadata, Opts) ->
+-spec extract_metadata(lager_msg:lager_msg(), list()) -> [kv()].
+extract_metadata(Message, Opts) ->
+	AllMetadata = lager_msg:metadata(Message),
     case proplists:get_value(metadata, Opts, all) of
         all ->
             AllMetadata;
+        {Mod, Fun} when is_atom(Mod) andalso is_atom(Fun) ->
+	        Mod:Fun(Message);
         Keys when is_list(Keys) ->
             lists:foldl(fun(K, Acc) ->
                             case proplists:lookup(K, AllMetadata) of

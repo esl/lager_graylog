@@ -23,12 +23,24 @@
 format(Message, Opts) ->
     {ok, Host} = inet:gethostname(),
     ShortMessage = lager_msg:message(Message),
-    Timestamp = erlang_ts_to_gelf_ts(lager_msg:timestamp(Message)),
     Level = severity_to_int(lager_msg:severity(Message)),
     Metadata = extract_metadata(lager_msg:metadata(Message), Opts),
-    format(Host, ShortMessage, Timestamp, Level, Metadata).
+    Props0 = [{<<"version">>, ?GELF_VERSION},
+              {<<"host">>, Host},
+              {<<"short_message">>, ShortMessage},
+              {<<"level">>, Level} | format_metadata_keys(Metadata)],
+    TsProps = timestamp_prop(lager_msg:timestamp(Message), Opts),
+    Props1 = lists:flatten([TsProps | Props0]),
+    [${, lists:join($,, [format_prop(K, V) || {K, V} <- Props1]) ,$}].
 
 %% Helpers
+
+-spec timestamp_prop(erlang:timestamp(), list()) -> [kv()].
+timestamp_prop(Timestamp, Opts) ->
+    case proplists:get_value(include_timestamp, Opts, true) of
+       true  -> [{<<"timestamp">>, erlang_ts_to_gelf_ts(Timestamp)}];
+       false -> []
+    end.
 
 -spec extract_metadata([kv()], list()) -> [kv()].
 extract_metadata(AllMetadata, Opts) ->
@@ -43,15 +55,6 @@ extract_metadata(AllMetadata, Opts) ->
                             end
                         end, [], Keys)
     end.
-
--spec format(string(), list(), float(), severity_int(), [kv()]) -> iodata().
-format(Host, ShortMessage, Timestamp, Level, Metadata) ->
-    Props = [{<<"version">>, ?GELF_VERSION},
-             {<<"host">>, Host},
-             {<<"short_message">>, ShortMessage},
-             {<<"timestamp">>, Timestamp},
-             {<<"level">>, Level} | format_metadata_keys(Metadata)],
-    [${, lists:join($,, [format_prop(K, V) || {K, V} <- Props]) ,$}].
 
 -spec format_metadata_keys([kv()]) -> [{iodata(), val()}].
 format_metadata_keys(Metadata) ->

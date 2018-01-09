@@ -10,7 +10,8 @@ all() ->
     [formats_log_with_mandatory_attributes,
      formats_all_metadata_by_default,
      formats_only_selected_metadata,
-     formats_all_metadata_if_configured
+     formats_all_metadata_if_configured,
+     doesnt_format_default_timestamp_if_configured
     ].
 
 %% Test cases
@@ -60,6 +61,15 @@ formats_all_metadata_if_configured(_Config) ->
     Gelf = decode(Formatted),
     ?assertEqual(<<"mod">>, maps:get(<<"_module">>, Gelf)),
     ?assertEqual(99, maps:get(<<"_line">>, Gelf)).
+
+doesnt_format_default_timestamp_if_configured(_Config) ->
+    Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
+    Opts = [{include_timestamp, false}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertNot(maps:is_key(<<"timestamp">>, Gelf)).
 
 %% Helpers
 

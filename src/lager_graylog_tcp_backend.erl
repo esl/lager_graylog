@@ -70,20 +70,24 @@ handle_event({log, Message}, #{name := Name,
                 ok ->
                     {ok, State};
                 {error, Reason} ->
-                    io:format("Couldn't send log message: ~p~n", [Reason]),
+                    lager:error("Couldn't send log payload: ~p", [Reason]),
                     {ok, try_connect(State#{socket := disconnected})}
             end;
         false ->
             {ok, State}
     end;
 handle_event({log, _}, #{socket := disconnected} = State) ->
+    {ok, State};
+handle_event(_, State) ->
     {ok, State}.
 
 handle_info({tcp_closed, _Socket}, #{socket := {connected, _Socket}} = State) ->
-    io:format("Connection closed by peer~n"),
+    lager:error("Connection closed", []),
     {ok, try_connect(State#{socket := disconnected})};
 handle_info({timeout, _, reconnect}, #{socket := disconnected} = State) ->
-    {ok, try_connect(State)}.
+    {ok, try_connect(State)};
+handle_info(_, State) ->
+    {ok, State}.
 
 terminate(_Arg, _State) ->
     ok.
@@ -107,13 +111,13 @@ try_connect(#{socket := disconnected, host := Host, port := Port, backoff := Bac
     case gen_tcp:connect(Host, Port, [binary, {active, false}]) of
         {ok, Socket} ->
             {_, NewBackoff} = backoff:succeed(Backoff),
-            io:format("Connected to ~p:~p~n", [Host, Port]),
+            lager:notice("Connected to ~p:~p~n", [Host, Port]),
             State#{backoff := NewBackoff, socket := {connected, Socket}};
         {error, Reason} ->
             {ReconnectIn, NewBackoff} = backoff:fail(Backoff),
             set_reconnection_timer(ReconnectIn),
-            io:format("Could not connect to ~p:~p: ~p. Retrying in ~ps~n",
-                                   [Host, Port, Reason, ReconnectIn]),
+            lager:error("Could not connect to ~p:~p: ~p. Retrying in ~ps~n",
+                     [Host, Port, Reason, ReconnectIn]),
             State#{backoff := NewBackoff}
     end.
 

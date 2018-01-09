@@ -35,11 +35,6 @@
 
 -record(state, {name, address, port, socket, level, formatter,formatter_config}).
 
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--compile([{parse_transform, lager_transform}]).
--endif.
-
 -include_lib("lager/include/lager.hrl").
 
 check_config({host,undefined}) -> throw(host_must_not_be_undefined);
@@ -116,56 +111,3 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
--ifdef(TEST).
-
--define(TEST_CONFIG(Address,Port),[{level,info},{name,test},{formatter,lager_default_formatter},{formatter_config,[message]},{host,Address},{port,Port}]).
-
-do_init() ->
-    % Test pretends to be the server, open a server connection
-    {ok,Socket}=gen_udp:open(0,[binary,{active,true}]),
-    {ok,{Address,Port}}=inet:sockname(Socket),
-
-    % configure to talk to the test
-    ?MODULE:init(?TEST_CONFIG(Address,Port)).
-
-basic_test_() ->
-    [
-     {"regular logging",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?INFO},State),
-              receive
-                  {udp, _Socket, _IP, _InPortNo, Packet} -> ?assertMatch(<<"Test message">>, Packet)
-                  after 500 -> throw(did_not_receive)
-              end
-      end
-     },
-     {"Test respects severity threshold",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?DEBUG,destinations=[]},State),
-              receive
-                  {udp, _Socket2, _IP, _InPortNo, Packet} -> throw({should_not_have_received,Packet})
-                  after 500 -> ok
-              end
-      end
-     },
-     {"Test direct destination",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?DEBUG,destinations=[{?MODULE,test}]},State),
-              receive
-                  {udp, _Socket2, _IP, _InPortNo, Packet} -> ?assertMatch(<<"Test message">>, Packet)
-                  after 1000 -> throw(did_not_receive)
-              end
-      end
-     }
-    ].
-
--endif.

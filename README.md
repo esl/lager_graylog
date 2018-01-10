@@ -55,13 +55,14 @@ supported (all of them are optional):
   (e.g. `[line, file]`) which must be included, or the `{module, function}` tuple. The function
   should take `lager_msg:lager_msg()` record as argument and return list of metadata tuples which
   will be included in the payload
-* `include_default_ts` (default: `true`) - instructs the formatter to include the `"timestamp"` field
+* `include_timestamp` (default: `true`) - instructs the formatter to include the `"timestamp"` field
   containing the timestamp in seconds with 6 decimal places. Note that Graylog will generate timestamp
   itself when this field is not present in the payload
+* `override_host` - if set, the `"host"` field in the GELF message will have the configured value
 
 Example configuration:
 
 ```erlang
-[{metadata, all}, {include_default_ts, false}]
+[{metadata, all}, {include_default_ts, false}, {override_host, "my-chosen-hostname"}]
 ```
 

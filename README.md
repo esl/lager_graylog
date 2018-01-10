@@ -37,7 +37,8 @@ The GELF formatter is implemented by the `lager_graylog_gelf_formatter` module. 
 messages according to GELF version 1.1. The following fields are always included in the message:
 
 * `"version"` - always has value `"1.1"`
-* `"host"` - hostname retrieved using `inet:gethostname/0`
+* `"host"` - hostname retrieved using `inet:gethostname/0` (might be overriden - see the
+  `override_host` option in the configuration section below)
 * `"short_message"` - the log message
 * `"level"` - the log severity formatted as a number as in [syslog](https://en.wikipedia.org/wiki/Syslog#Severity_level)
 

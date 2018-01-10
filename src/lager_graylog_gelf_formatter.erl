@@ -21,7 +21,7 @@
 
 -spec format(lager_msg:lager_msg(), list()) -> iodata().
 format(Message, Opts) ->
-    {ok, Host} = inet:gethostname(),
+	Host = get_host(Opts),
     ShortMessage = lager_msg:message(Message),
     Level = severity_to_int(lager_msg:severity(Message)),
     Metadata = extract_metadata(Message, Opts),
@@ -34,6 +34,16 @@ format(Message, Opts) ->
     [${, lists:join($,, [format_prop(K, V) || {K, V} <- Props1]) ,$}].
 
 %% Helpers
+
+-spec get_host(list()) -> val().
+get_host(Opts) ->
+	case proplists:lookup(override_host, Opts) of
+        {override_host, Host} ->
+            Host;
+        _ ->
+            {ok, Host} = inet:gethostname(),
+            Host
+    end.
 
 -spec timestamp_prop(erlang:timestamp(), list()) -> [kv()].
 timestamp_prop(Timestamp, Opts) ->

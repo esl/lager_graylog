@@ -12,7 +12,8 @@ all() ->
      formats_only_selected_metadata,
      formats_all_metadata_if_configured,
      doesnt_format_default_timestamp_if_configured,
-	 formats_metadata_using_configured_function
+	 formats_metadata_using_configured_function,
+     overrides_host_if_configured
     ].
 
 %% Test cases
@@ -80,6 +81,16 @@ formats_metadata_using_configured_function(_Config) ->
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"sample">>, maps:get(<<"_meta">>, Gelf)).
+
+overrides_host_if_configured(_Config) ->
+    Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
+    Host = <<"some-host">>,
+    Opts = [{override_host, Host}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(Host, maps:get(<<"host">>, Gelf)).
 
 metadata_fun(_) ->
     [{meta, "sample"}].

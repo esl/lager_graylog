@@ -108,7 +108,7 @@ get_common_config(Opts) ->
 
 -spec try_connect(state()) -> state().
 try_connect(#{socket := disconnected, host := Host, port := Port, backoff := Backoff} = State) ->
-    case gen_tcp:connect(Host, Port, [binary, {active, false}]) of
+    case gen_tcp:connect(Host, Port, [binary, {active, false}], 5000) of
         {ok, Socket} ->
             {_, NewBackoff} = backoff:succeed(Backoff),
             lager:notice("Connected to ~p:~p~n", [Host, Port]),

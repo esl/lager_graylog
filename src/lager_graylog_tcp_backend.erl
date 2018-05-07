@@ -12,15 +12,13 @@
 -define(BACKOFF_START, 1).
 -define(BACKOFF_MAX, 30).
 
--type host() :: inet:hostname().
--type port_number() :: inet:port_number().
--type name() :: {?MODULE, {host(), port_number()}}.
+-type name() :: {?MODULE, {lager_graylog:host(), lager_graylog:port_number()}}.
 -type socket() :: disconnected | {connected, gen_tcp:socket()}.
 -type state() :: #{name          := name(),
                    level         := lager_graylog_utils:mask(),
-                   host          := host(),
-                   port          := port_number(),
-                   socket        := gen_tcp:socket(),
+                   host          := lager_graylog:host(),
+                   port          := lager_graylog:port_number(),
+                   socket        := socket(),
                    backoff       := backoff:backoff(),
                    formatter     := module(),
                    formatter_config := any()}.
@@ -28,23 +26,25 @@
 %% gen_event callbacks
 
 init(Opts) ->
-    #{level := Level,
-      host := Host,
-      port := Port,
-      formatter := Formatter,
-      formatter_config := FormatterConfig} = get_common_config(Opts),
-
-
-    {ok, Mask} = lager_graylog_utils:validate_loglevel(Level),
-    State = #{name => {?MODULE, {Host, Port}},
-              level => Mask,
-              host => Host,
-              port => Port,
-              socket => disconnected,
-              backoff => backoff:type(backoff:init(?BACKOFF_START, ?BACKOFF_MAX), jitter),
-              formatter => Formatter,
-              formatter_config => FormatterConfig},
-    {ok, try_connect(State)}.
+    case lager_graylog_utils:parse_common_opts(Opts) of
+        {ok, Config} ->
+            #{level := Mask,
+              host := Host,
+              port := Port,
+              formatter := Formatter,
+              formatter_config := FormatterConfig} = Config,
+            State = #{name => {?MODULE, {Host, Port}},
+                      level => Mask,
+                      host => Host,
+                      port => Port,
+                      socket => disconnected,
+                      backoff => backoff:type(backoff:init(?BACKOFF_START, ?BACKOFF_MAX), jitter),
+                      formatter => Formatter,
+                      formatter_config => FormatterConfig},
+            {ok, try_connect(State)};
+        {error, Reason} ->
+            {error, {invalid_opts, Reason}}
+    end.
 
 handle_call({set_loglevel, Level}, State) ->
     case lager_graylog_utils:validate_loglevel(Level) of
@@ -97,15 +97,6 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Helpers
 
--spec get_common_config(any()) -> map() | no_return().
-get_common_config(Opts) ->
-    case lager_graylog_utils:parse_common_opts(Opts) of
-        {ok, Config} ->
-            Config;
-        Error ->
-            exit(Error)
-    end.
-
 -spec try_connect(state()) -> state().
 try_connect(#{socket := disconnected, host := Host, port := Port, backoff := Backoff} = State) ->
     case gen_tcp:connect(Host, Port, [binary, {active, false}], 5000) of
@@ -123,5 +114,6 @@ try_connect(#{socket := disconnected, host := Host, port := Port, backoff := Bac
 
 -spec set_reconnection_timer(non_neg_integer()) -> ok.
 set_reconnection_timer(ReconnectInSeconds) ->
-    erlang:start_timer(ReconnectInSeconds * 1000, self(), reconnect).
+    erlang:start_timer(ReconnectInSeconds * 1000, self(), reconnect),
+    ok.
 

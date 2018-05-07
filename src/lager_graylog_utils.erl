@@ -27,7 +27,8 @@ parse_common_opts(Opts) when is_list(Opts) ->
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
 
-    case validate_config_values([{level, Level}, {host, Host}, {port, Port}]) of
+    case validate_config_values([{level, Level}, {host, Host}, {port, Port},
+                                 {formatter, Formatter}]) of
         ok ->
             Config = #{level => Level,
                        host => Host,
@@ -68,6 +69,8 @@ validate_config_value({level, L}) ->
         error ->
             {error, {invalid_loglevel, L}}
      end;
+validate_config_value({formatter, Formatter}) when not is_atom(Formatter) ->
+    {error, {invalid_formatter, Formatter}};
 validate_config_value(_) ->
     ok.
 

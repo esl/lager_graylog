@@ -7,9 +7,8 @@ cache:
   - ~/.cache/rebar3
 
 otp_release:
-  - 20.0
+  - 20.3
   - 19.3
-  - 18.3
 
 script:
   - rebar3 ct

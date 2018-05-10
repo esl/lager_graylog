@@ -1,5 +1,7 @@
 ## lager_graylog
 
+[![Build Status](https://travis-ci.org/esl/lager_graylog.svg?branch=master)](https://travis-ci.org/esl/lager_graylog)
+
 This application provides lager backends for sending log messages to [Graylog](https://www.graylog.org/)
 over UDP or TCP, and the formatter module which spits out logs in [GELF](http://docs.graylog.org/en/stable/pages/gelf.html)
 format.

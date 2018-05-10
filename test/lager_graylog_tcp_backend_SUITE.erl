@@ -5,11 +5,6 @@
 
 -compile(export_all).
 
--record(recv_socket, {socket :: gen_tcp:socket(),
-                      buffered_count = 0 :: non_neg_integer()}).
-
--type recv_socket() :: #recv_socket{}.
-
 -define(HOST, {127, 0, 0, 1}).
 
 %% Suite configuration
@@ -34,44 +29,41 @@ init_per_suite(Config) ->
 end_per_suite(_) ->
     application:stop(lager).
 
-%% Test cases
-
-sends_log_messages_to_configured_endpoint(_Config) ->
+init_per_testcase(_, Config) ->
     {Socket, Port} = listen(),
     start_lager_handler(Port),
     RecvSocket = accept(Socket),
     flush(RecvSocket),
+    [{socket, Socket}, {recv_socket, RecvSocket}, {port, Port} | Config].
+
+end_per_testcase(_, Config) ->
+    stop_lager_handler(?config(port, Config)).
+
+%% Test cases
+
+sends_log_messages_to_configured_endpoint(Config) ->
+    RecvSocket = ?config(recv_socket, Config),
 
     lager:info("info log message"),
     lager:critical("critical log message"),
 
     ok = recv(RecvSocket),
     ok = recv(RecvSocket),
-    nothing = recv(RecvSocket),
+    nothing = recv(RecvSocket).
 
-    stop_lager_handler(Port).
-
-doesnt_log_over_configured_level(_Config) ->
-    {Socket, Port} = listen(),
-    start_lager_handler(Port),
-    RecvSocket = accept(Socket),
-    flush(RecvSocket),
+doesnt_log_over_configured_level(Config) ->
+    RecvSocket = ?config(recv_socket, Config),
 
     lager:info("log message"),
     ok = recv(RecvSocket),
 
-    ok = lager:set_loglevel(handler_id(Port), warning),
+    ok = lager:set_loglevel(handler_id(?config(port, Config)), warning),
 
     lager:info("log message"),
-    nothing = recv(RecvSocket),
+    nothing = recv(RecvSocket).
 
-    stop_lager_handler(Port).
-
-drops_log_messages_if_there_is_no_connection_and_reconnects_later(_Config) ->
-    {Socket, Port} = listen(),
-    start_lager_handler(Port),
-    RecvSocket1 = accept(Socket),
-    flush(RecvSocket1),
+drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
+    RecvSocket1 = ?config(recv_socket, Config),
 
     lager:info("log message 1"),
     ok = recv(RecvSocket1),
@@ -80,14 +72,12 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(_Config) ->
     lager:info("log message 2"),
     lager:info("log message 3"),
 
-    RecvSocket2 = accept(Socket),
-    {ok, Log1} = recv_with_payload(RecvSocket2),
-    {ok, Log2} = recv_with_payload(RecvSocket2),
-    ?assertMatch({_, _}, binary:match(Log1, <<"Couldn't send log payload">>)),
-    ?assertMatch({_, _}, binary:match(Log2, <<"Connected to">>)),
-    nothing = recv(RecvSocket2),
-
-    stop_lager_handler(Port).
+    RecvSocket2 = accept(?config(socket, Config)),
+    {ok, #{<<"short_message">> := LogMessage1}} = recv_with_payload(RecvSocket2),
+    {ok, #{<<"short_message">> := LogMessage2}} = recv_with_payload(RecvSocket2),
+    ?assertMatch({_, _}, binary:match(LogMessage1, <<"Couldn't send log payload">>)),
+    ?assertMatch({_, _}, binary:match(LogMessage2, <<"Connected to">>)),
+    nothing = recv(RecvSocket2).
 
 %% Helpers
 
@@ -127,29 +117,28 @@ recv(RecvSocket) ->
             nothing
     end.
 
--spec recv_with_payload(gen_tcp:socket()) -> {ok, binary()} | nothing.
+-spec recv_with_payload(gen_tcp:socket()) -> {ok, map()} | nothing.
 recv_with_payload(RecvSocket) ->
     receive
         {log, Log} ->
-            ct:pal("~s", [Log]),
             {ok, Log}
     after
         0 ->
             maybe_recv_from_socket(RecvSocket)
     end.
 
--spec maybe_recv_from_socket(gen_tcp:socket()) -> {ok, binary()} | nothing.
+-spec maybe_recv_from_socket(gen_tcp:socket()) -> {ok, map()} | nothing.
 maybe_recv_from_socket(RecvSocket) ->
     case gen_tcp:recv(RecvSocket, 0, 1000) of
         {ok, Data} ->
-            Logs = binary:split(Data, <<0>>, [trim_all]),
-            [self() ! {log, Log} || Log <- Logs],
+            Logs = binary:split(Data, <<0>>, [trim_all, global]),
+            [self() ! {log, jsx:decode(Log, [return_maps])} || Log <- Logs],
             recv_with_payload(RecvSocket);
         {error, timeout} ->
             nothing
     end.
 
--spec flush(recv_socket()) -> ok.
+-spec flush(gen_tcp:socket()) -> ok.
 flush(RecvSocket) ->
     case gen_tcp:recv(RecvSocket, 0, 1000) of
         % only handle successful case or timeout - let the other errors manifest themselves

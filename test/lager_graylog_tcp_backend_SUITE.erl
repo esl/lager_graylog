@@ -5,11 +5,6 @@
 
 -compile(export_all).
 
--record(recv_socket, {socket :: gen_tcp:socket(),
-                      buffered_count = 0 :: non_neg_integer()}).
-
--type recv_socket() :: #recv_socket{}.
-
 -define(HOST, {127, 0, 0, 1}).
 
 %% Suite configuration
@@ -149,7 +144,7 @@ maybe_recv_from_socket(RecvSocket) ->
             nothing
     end.
 
--spec flush(recv_socket()) -> ok.
+-spec flush(gen_tcp:socket()) -> ok.
 flush(RecvSocket) ->
     case gen_tcp:recv(RecvSocket, 0, 1000) of
         % only handle successful case or timeout - let the other errors manifest themselves

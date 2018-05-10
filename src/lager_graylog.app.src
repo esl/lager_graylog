@@ -14,7 +14,7 @@
                  ]},
   {env, []},
   {maintainers, ["esl", "Heinz N. Gies"]},
-  {licenses, ["Other"]},
+  {licenses, ["Apache 2.0"]},
   {links,[{"Github",
            "https://github.com/esl/lager_graylog"}]}
  ]

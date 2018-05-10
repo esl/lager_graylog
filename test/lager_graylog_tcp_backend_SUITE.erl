@@ -73,10 +73,10 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
     lager:info("log message 3"),
 
     RecvSocket2 = accept(?config(socket, Config)),
-    {ok, Log1} = recv_with_payload(RecvSocket2),
-    {ok, Log2} = recv_with_payload(RecvSocket2),
-    ?assertMatch({_, _}, binary:match(Log1, <<"Couldn't send log payload">>)),
-    ?assertMatch({_, _}, binary:match(Log2, <<"Connected to">>)),
+    {ok, #{<<"short_message">> := LogMessage1}} = recv_with_payload(RecvSocket2),
+    {ok, #{<<"short_message">> := LogMessage2}} = recv_with_payload(RecvSocket2),
+    ?assertMatch({_, _}, binary:match(LogMessage1, <<"Couldn't send log payload">>)),
+    ?assertMatch({_, _}, binary:match(LogMessage2, <<"Connected to">>)),
     nothing = recv(RecvSocket2).
 
 %% Helpers
@@ -117,23 +117,22 @@ recv(RecvSocket) ->
             nothing
     end.
 
--spec recv_with_payload(gen_tcp:socket()) -> {ok, binary()} | nothing.
+-spec recv_with_payload(gen_tcp:socket()) -> {ok, map()} | nothing.
 recv_with_payload(RecvSocket) ->
     receive
         {log, Log} ->
-            ct:pal("~s", [Log]),
             {ok, Log}
     after
         0 ->
             maybe_recv_from_socket(RecvSocket)
     end.
 
--spec maybe_recv_from_socket(gen_tcp:socket()) -> {ok, binary()} | nothing.
+-spec maybe_recv_from_socket(gen_tcp:socket()) -> {ok, map()} | nothing.
 maybe_recv_from_socket(RecvSocket) ->
     case gen_tcp:recv(RecvSocket, 0, 1000) of
         {ok, Data} ->
-            Logs = binary:split(Data, <<0>>, [trim_all]),
-            [self() ! {log, Log} || Log <- Logs],
+            Logs = binary:split(Data, <<0>>, [trim_all, global]),
+            [self() ! {log, jsx:decode(Log, [return_maps])} || Log <- Logs],
             recv_with_payload(RecvSocket);
         {error, timeout} ->
             nothing

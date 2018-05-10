@@ -33,12 +33,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
          code_change/3]).
 
--record(state, {name, address, port, socket, level, formatter,format_config}).
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--compile([{parse_transform, lager_transform}]).
--endif.
+-record(state, {name, address, port, socket, level, formatter,formatter_config}).
 
 -include_lib("lager/include/lager.hrl").
 
@@ -54,7 +49,7 @@ check_config(_) -> true.
 init(Params)->
     Level        = proplists:get_value(level, Params, debug),
     Formatter    = proplists:get_value(formatter,Params,lager_default_formatter),
-    FormatConfig = proplists:get_value(format_config,Params,[]),
+    FormatterConfig = proplists:get_value(formatter_config,Params,[]),
     InetFamily   = proplists:get_value(inet_family,Params,inet),
 
     Host         = proplists:get_value(host,Params,undefined),
@@ -78,7 +73,7 @@ init(Params)->
         port=Port,
         socket=Socket,
         formatter=Formatter,
-        format_config=FormatConfig}
+        formatter_config=FormatterConfig}
     }.
 
 
@@ -96,9 +91,9 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event(Message,#state{level=L,formatter=Formatter,format_config=FormatConfig} = State) ->
+handle_event(Message,#state{level=L,formatter=Formatter,formatter_config=FormatterConfig} = State) ->
     {log, MessageInner} = Message,
-    Msg=Formatter:format(MessageInner,FormatConfig),
+    Msg=Formatter:format(MessageInner,FormatterConfig),
     ok=gen_udp:send(State#state.socket,State#state.address,State#state.port,Msg),
     {ok, State};
 handle_event(_Event, State) ->
@@ -116,56 +111,3 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
--ifdef(TEST).
-
--define(TEST_CONFIG(Address,Port),[{level,info},{name,test},{formatter,lager_default_formatter},{format_config,[message]},{host,Address},{port,Port}]).
-
-do_init() ->
-    % Test pretends to be the server, open a server connection
-    {ok,Socket}=gen_udp:open(0,[binary,{active,true}]),
-    {ok,{Address,Port}}=inet:sockname(Socket),
-
-    % configure to talk to the test
-    ?MODULE:init(?TEST_CONFIG(Address,Port)).
-
-basic_test_() ->
-    [
-     {"regular logging",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?INFO},State),
-              receive
-                  {udp, _Socket, _IP, _InPortNo, Packet} -> ?assertMatch(<<"Test message">>, Packet)
-                  after 500 -> throw(did_not_receive)
-              end
-      end
-     },
-     {"Test respects severity threshold",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?DEBUG,destinations=[]},State),
-              receive
-                  {udp, _Socket2, _IP, _InPortNo, Packet} -> throw({should_not_have_received,Packet})
-                  after 500 -> ok
-              end
-      end
-     },
-     {"Test direct destination",
-      fun() ->
-              {ok,State}=do_init(),
-
-              % Send a message
-              ?MODULE:handle_event(#lager_log_message{message= <<"Test message">>,severity_as_int=?DEBUG,destinations=[{?MODULE,test}]},State),
-              receive
-                  {udp, _Socket2, _IP, _InPortNo, Packet} -> ?assertMatch(<<"Test message">>, Packet)
-                  after 1000 -> throw(did_not_receive)
-              end
-      end
-     }
-    ].
-
--endif.

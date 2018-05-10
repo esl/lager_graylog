@@ -1,0 +1,19 @@
+language: erlang
+branches:
+  only:
+    - master
+
+cache:
+  - ~/.cache/rebar3
+
+otp_release:
+  - 20.0
+  - 19.3
+  - 18.3
+
+script:
+  - rebar3 ct
+  - rebar3 dialyzer
+
+notifications:
+  email: mongoose-im@erlang-solutions.com

@@ -1,11 +1,8 @@
 %-*-Erlang-*-
 {application, lager_graylog,
  [
-  {description, "An Erlang lager_graylog library"},
+  {description, "lager backends sending log messages to Graylog"},
   {vsn, "0.1.0"},
-  {modules, [
-             lager_graylog
-            ]},
   {registered, []},
   {applications, [
                   kernel,

@@ -5,11 +5,6 @@
 
 -compile(export_all).
 
--record(recv_socket, {socket :: gen_tcp:socket(),
-                      buffered_count = 0 :: non_neg_integer()}).
-
--type recv_socket() :: #recv_socket{}.
-
 -define(HOST, {127, 0, 0, 1}).
 
 %% Suite configuration

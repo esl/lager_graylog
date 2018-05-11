@@ -33,6 +33,27 @@ options are supported:
 * `formatter_config` - (**optional**, default: `[]`) - passed as a second argument to formatter's
   `format/2` function
 
+### UDP backend
+
+If you care more about speed than reliability of delivery, you can use UDP-based backend.
+
+To use it, just declare it in your lager config:
+
+```erlang
+[{lager, [{handlers, [{lager_graylog_tcp_backend, [{host, "graylog-hostname"},
+                                                   {port, 12201}]
+
+}]}]}].
+```
+
+It accepts exactly the same set of options as TCP backend.
+
+#### Chunking & compression
+
+This backend currently doesn't support neither [chunking](http://docs.graylog.org/en/2.4/pages/gelf.html#chunking)
+nor [compression](http://docs.graylog.org/en/2.4/pages/gelf.html#compression). This means that too
+big log messages won't be probably received by Graylog due to packet fragmentation.
+
 ### GELF formatter
 
 The GELF formatter is implemented by the `lager_graylog_gelf_formatter` module. It formats log

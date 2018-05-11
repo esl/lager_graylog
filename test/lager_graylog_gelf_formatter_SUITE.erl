@@ -13,7 +13,18 @@ all() ->
      formats_all_metadata_if_configured,
      doesnt_format_default_timestamp_if_configured,
 	 formats_metadata_using_configured_function,
-     overrides_host_if_configured
+     overrides_host_if_configured_as_binary,
+     overrides_host_if_configured_as_string,
+     binary_metadata_formatting,
+     atom_metadata_formatting,
+     integer_metadata_formatting,
+     float_metadata_formatting,
+     reference_metadata_formatting,
+     pid_metadata_formatting,
+     list_metadata_formatting,
+     tuple_metadata_formatting,
+     map_metadata_formatting,
+     bitstring_metadata_formatting
     ].
 
 %% Test cases
@@ -81,9 +92,9 @@ formats_metadata_using_configured_function(_Config) ->
     Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
 
     Gelf = decode(Formatted),
-    ?assertEqual(<<"sample">>, maps:get(<<"_meta">>, Gelf)).
+    ?assertEqual(<<"\"sample\"">>, maps:get(<<"_meta">>, Gelf)).
 
-overrides_host_if_configured(_Config) ->
+overrides_host_if_configured_as_binary(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
     Host = <<"some-host">>,
     Opts = [{override_host, Host}],
@@ -92,6 +103,60 @@ overrides_host_if_configured(_Config) ->
 
     Gelf = decode(Formatted),
     ?assertEqual(Host, maps:get(<<"host">>, Gelf)).
+
+overrides_host_if_configured_as_string(_Config) ->
+    Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
+    Host = "some-host",
+    Opts = [{override_host, Host}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(list_to_binary(Host), maps:get(<<"host">>, Gelf)).
+
+
+binary_metadata_formatting(_Config) ->
+    assert_metadata_format([{<<"printable">>, <<"<<\"printable\">>">>},
+                            {<<1, 2, 3>>, <<"<<1,2,3>>">>}]).
+
+atom_metadata_formatting(_Config) ->
+    assert_metadata_format([{'some-atom', <<"some-atom">>}]).
+
+integer_metadata_formatting(_Config) ->
+    assert_metadata_format([{-1, -1},
+                            {1, 1},
+                            {0, 0}]).
+
+float_metadata_formatting(_Config) ->
+    assert_metadata_format([{-1.12345, -1.12345},
+                            {1.12345, 1.12345},
+                            {0.0, 0.0}]).
+
+reference_metadata_formatting(_Config) ->
+    Ref = make_ref(),
+    assert_metadata_format([{Ref, list_to_binary(erlang:ref_to_list(Ref))}]).
+
+pid_metadata_formatting(_Config) ->
+    Pid = spawn(fun() -> ok end),
+    assert_metadata_format([{Pid, list_to_binary(pid_to_list(Pid))}]).
+
+list_metadata_formatting(_Config) ->
+    assert_metadata_format([{"string", <<"\"string\"">>},
+                            {[1, 2, 3], <<"[1,2,3]">>},
+                            {[], <<"[]">>},
+                            {[48, [<<"hello">>], 21], <<"[48,[<<\"hello\">>],21]">>}]).
+
+tuple_metadata_formatting(_Config) ->
+    assert_metadata_format([{{}, <<"{}">>},
+                            {{1}, <<"{1}">>},
+                            {{"hello", there}, <<"{\"hello\",there}">>}]).
+
+map_metadata_formatting(_Config) ->
+    assert_metadata_format([{#{}, <<"#{}">>},
+                            {#{key => val}, <<"#{key => val}">>}]).
+
+bitstring_metadata_formatting(_Config) ->
+    assert_metadata_format([{<<1:3>>, <<"<<1:3>>">>}]).
 
 metadata_fun(_) ->
     [{meta, "sample"}].
@@ -108,4 +173,21 @@ decode(JSON) ->
 assert_same_timestamp({MegaSecs, Secs, MicroSecs}, UnixTS) ->
     ?assertEqual((MegaSecs * 1000000) + Secs + (MicroSecs / 1000000), UnixTS),
     ok.
+
+-spec assert_metadata_format([{term(), binary()}]) -> ok | no_return().
+assert_metadata_format(ValuesWithExpectedFormat) ->
+    MetadataWithExpectedFormat0 = lists:zip(lists:seq(1, length(ValuesWithExpectedFormat)),
+                                            ValuesWithExpectedFormat),
+    MetadataWithExpectedFormat = lists:map(fun({IntKey, {V, F}}) ->
+                                               {list_to_atom(integer_to_list(IntKey)), {V, F}}
+                                           end, MetadataWithExpectedFormat0),
+    MetadataToLog = [{Key, Value} || {Key, {Value, _Format}} <- MetadataWithExpectedFormat],
+    Log = lager_msg:new("hello", erlang:timestamp(), debug, MetadataToLog, []),
+    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    Gelf = decode(Formatted),
+    lists:foreach(fun({Key, {_Value, ExpectedFormat}}) ->
+                      GelfKey = iolist_to_binary(io_lib:format("_~s", [Key])),
+                      ?assertEqual(ExpectedFormat, maps:get(GelfKey, Gelf))
+                  end, MetadataWithExpectedFormat).
+
 

@@ -5,11 +5,6 @@
 
 -compile(export_all).
 
--record(recv_socket, {socket :: gen_tcp:socket(),
-                      buffered_count = 0 :: non_neg_integer()}).
-
--type recv_socket() :: #recv_socket{}.
-
 -define(HOST, {127, 0, 0, 1}).
 
 %% Suite configuration
@@ -34,43 +29,36 @@ init_per_suite(Config) ->
 end_per_suite(_) ->
     application:stop(lager).
 
-%% Test cases
-
-sends_log_messages_to_configured_endpoint(_Config) ->
+init_per_testcase(_, Config) ->
     {Socket, Port} = listen(),
     start_lager_handler(Port),
     RecvSocket = accept(Socket),
     flush(RecvSocket),
+    [{socket, Socket}, {recv_socket, RecvSocket}, {port, Port} | Config].
 
+end_per_testcase(_, Config) ->
+    stop_lager_handler(?config(port, Config)).
+
+%% Test cases
+
+sends_log_messages_to_configured_endpoint(Config) ->
     Log1 = log(info, "info log message"),
     Log2 = log(critical, "critical log message"),
 
-    Logs = flush(RecvSocket),
-    assert_logged(Logs, [Log1, Log2]),
+    Logs = flush(?config(recv_socket, Config)),
+    assert_logged(Logs, [Log1, Log2]).
 
-    stop_lager_handler(Port).
-
-doesnt_log_over_configured_level(_Config) ->
-    {Socket, Port} = listen(),
-    start_lager_handler(Port),
-    RecvSocket = accept(Socket),
-    flush(RecvSocket),
-
+doesnt_log_over_configured_level(Config) ->
     Log1 = log(info, "log message 1"),
-    ok = lager:set_loglevel(handler_id(Port), warning),
+    ok = lager:set_loglevel(handler_id(?config(port, Config)), warning),
     Log2 = log(info, "log message 2"),
 
-    Logs = flush(RecvSocket),
+    Logs = flush(?config(recv_socket, Config)),
     assert_logged(Logs, [Log1]),
-    assert_not_logged(Logs, [Log2]),
+    assert_not_logged(Logs, [Log2]).
 
-    stop_lager_handler(Port).
-
-drops_log_messages_if_there_is_no_connection_and_reconnects_later(_Config) ->
-    {Socket, Port} = listen(),
-    start_lager_handler(Port),
-    RecvSocket1 = accept(Socket),
-    flush(RecvSocket1),
+drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
+    RecvSocket1 = ?config(recv_socket, Config),
 
     Log1 = log(info, "log message 1"),
     Logs1 = flush(RecvSocket1),
@@ -78,15 +66,13 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(_Config) ->
     Log2 = log(info, "log message 2"),
     Log3 = log(info, "log message 3"),
 
-    RecvSocket2 = accept(Socket),
+    RecvSocket2 = accept(?config(socket, Config)),
     Log4 = log(info, "log message 4"),
     Logs2 = flush(RecvSocket2),
 
     Logs = Logs1 ++ Logs2,
     assert_logged(Logs, [Log1, Log4]),
-    assert_not_logged(Logs, [Log2, Log3]),
-
-    stop_lager_handler(Port).
+    assert_not_logged(Logs, [Log2, Log3]).
 
 %% Helpers
 

@@ -42,12 +42,11 @@ sends_log_messages_to_configured_endpoint(_Config) ->
     RecvSocket = accept(Socket),
     flush(RecvSocket),
 
-    lager:info("info log message"),
-    lager:critical("critical log message"),
+    Log1 = log(info, "info log message"),
+    Log2 = log(critical, "critical log message"),
 
-    ok = recv(RecvSocket),
-    ok = recv(RecvSocket),
-    nothing = recv(RecvSocket),
+    Logs = flush(RecvSocket),
+    assert_logged(Logs, [Log1, Log2]),
 
     stop_lager_handler(Port).
 
@@ -57,13 +56,13 @@ doesnt_log_over_configured_level(_Config) ->
     RecvSocket = accept(Socket),
     flush(RecvSocket),
 
-    lager:info("log message"),
-    ok = recv(RecvSocket),
-
+    Log1 = log(info, "log message 1"),
     ok = lager:set_loglevel(handler_id(Port), warning),
+    Log2 = log(info, "log message 2"),
 
-    lager:info("log message"),
-    nothing = recv(RecvSocket),
+    Logs = flush(RecvSocket),
+    assert_logged(Logs, [Log1]),
+    assert_not_logged(Logs, [Log2]),
 
     stop_lager_handler(Port).
 
@@ -73,19 +72,19 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(_Config) ->
     RecvSocket1 = accept(Socket),
     flush(RecvSocket1),
 
-    lager:info("log message 1"),
-    ok = recv(RecvSocket1),
-
+    Log1 = log(info, "log message 1"),
+    Logs1 = flush(RecvSocket1),
     close(RecvSocket1),
-    lager:info("log message 2"),
-    lager:info("log message 3"),
+    Log2 = log(info, "log message 2"),
+    Log3 = log(info, "log message 3"),
 
     RecvSocket2 = accept(Socket),
-    {ok, Log1} = recv_with_payload(RecvSocket2),
-    {ok, Log2} = recv_with_payload(RecvSocket2),
-    ?assertMatch({_, _}, binary:match(Log1, <<"Couldn't send log payload">>)),
-    ?assertMatch({_, _}, binary:match(Log2, <<"Connected to">>)),
-    nothing = recv(RecvSocket2),
+    Log4 = log(info, "log message 4"),
+    Logs2 = flush(RecvSocket2),
+
+    Logs = Logs1 ++ Logs2,
+    assert_logged(Logs, [Log1, Log4]),
+    assert_not_logged(Logs, [Log2, Log3]),
 
     stop_lager_handler(Port).
 
@@ -118,47 +117,57 @@ accept(Socket) ->
 close(RecvSocket) ->
     gen_tcp:close(RecvSocket).
 
--spec recv(gen_tcp:socket()) -> ok | nothing.
-recv(RecvSocket) ->
-    case recv_with_payload(RecvSocket) of
-        {ok, _} ->
-            ok;
-        nothing ->
-            nothing
-    end.
-
--spec recv_with_payload(gen_tcp:socket()) -> {ok, binary()} | nothing.
-recv_with_payload(RecvSocket) ->
-    receive
-        {log, Log} ->
-            ct:pal("~s", [Log]),
-            {ok, Log}
-    after
-        0 ->
-            maybe_recv_from_socket(RecvSocket)
-    end.
-
--spec maybe_recv_from_socket(gen_tcp:socket()) -> {ok, binary()} | nothing.
-maybe_recv_from_socket(RecvSocket) ->
-    case gen_tcp:recv(RecvSocket, 0, 1000) of
-        {ok, Data} ->
-            Logs = binary:split(Data, <<0>>, [trim_all]),
-            [self() ! {log, Log} || Log <- Logs],
-            recv_with_payload(RecvSocket);
-        {error, timeout} ->
-            nothing
-    end.
-
--spec flush(recv_socket()) -> ok.
+-spec flush(gen_tcp:socket()) -> [map()].
 flush(RecvSocket) ->
-    case gen_tcp:recv(RecvSocket, 0, 1000) of
-        % only handle successful case or timeout - let the other errors manifest themselves
-        {ok, _} ->
-            ok;
+    Data = iolist_to_binary(recv(RecvSocket)),
+    Logs = binary:split(Data, <<0>>, [trim_all, global]),
+    [jsx:decode(Log, [return_maps]) || Log <- Logs].
+
+-spec recv(gen_tcp:socket()) -> binary().
+recv(RecvSocket) ->
+    recv(RecvSocket, <<>>).
+
+-spec recv(gen_tcp:socket(), iodata()) -> iodata().
+recv(RecvSocket, Acc) ->
+    case gen_tcp:recv(RecvSocket, 0, 100) of
+        {ok, Data} ->
+            ct:pal("DATA: ~p", [Data]),
+            recv(RecvSocket, [Acc, Data]);
         {error, timeout} ->
-            ok
+            Acc
     end.
 
 -spec handler_id(inet:port_number()) -> term().
 handler_id(Port) ->
     {lager_graylog_tcp_backend, {?HOST, Port}}.
+
+
+-spec log(atom(), string()) -> pos_integer().
+log(Level, Message) ->
+    LogRef = erlang:unique_integer([positive, monotonic]),
+    lager:log(Level, [{test_log_ref, LogRef}], Message),
+    LogRef.
+
+-spec assert_logged([map()], [pos_integer()]) -> ok | no_return().
+assert_logged(_Logs, []) ->
+    ok;
+assert_logged([#{<<"_test_log_ref">> := LogRef} | Logs], [LogRef | LogRefs]) ->
+    assert_logged(Logs, LogRefs);
+assert_logged([_ | Logs], LogRefs) ->
+    assert_logged(Logs, LogRefs);
+assert_logged(Logs, [LogRef | _]) ->
+    error({log_not_found, [{log_ref, LogRef}, {remaining_logs, Logs}]}).
+
+-spec assert_not_logged([map()], [pos_integer()]) -> ok | no_return().
+assert_not_logged(Logs, LogRefs) ->
+    FilteredLogs = lists:filter(
+                       fun(#{<<"_test_log_ref">> := LogRef}) -> lists:member(LogRef, LogRefs);
+                          (_) -> false %% filter out logs which weren't produced by a test case
+                       end, Logs),
+    case FilteredLogs of
+        [] ->
+            ok;
+        _ ->
+            error({found_logs_but_shouldnt, [{log_refs, LogRefs}, {found_logs, FilteredLogs}]})
+    end.
+

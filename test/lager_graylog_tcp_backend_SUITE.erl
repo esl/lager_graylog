@@ -107,7 +107,7 @@ close(RecvSocket) ->
 flush(RecvSocket) ->
     Data = iolist_to_binary(recv(RecvSocket)),
     Logs = binary:split(Data, <<0>>, [trim_all, global]),
-    [jsx:decode(Log, [return_maps]) || Log <- Logs].
+    [jiffy:decode(Log, [return_maps]) || Log <- Logs].
 
 -spec recv(gen_tcp:socket()) -> binary().
 recv(RecvSocket) ->

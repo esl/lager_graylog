@@ -99,7 +99,7 @@ metadata_fun(_) ->
 
 -spec decode(iodata()) -> map().
 decode(JSON) when is_binary(JSON) ->
-    jsx:decode(JSON, [return_maps]);
+    jiffy:decode(JSON, [return_maps]);
 decode(JSON) ->
     decode(iolist_to_binary(JSON)).
 

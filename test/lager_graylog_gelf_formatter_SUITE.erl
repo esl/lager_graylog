@@ -25,6 +25,7 @@ formats_log_with_mandatory_attributes(_Config) ->
     Log = lager_msg:new(Message, Timestamp, debug, [], []),
 
     Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    ct:pal("~s", [Formatted]),
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"1.1">>, maps:get(<<"version">>, Gelf)),

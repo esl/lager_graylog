@@ -61,6 +61,7 @@ init(Params)->
     check_config({host,Host}),
     check_config({port,Port}),
     check_config({level,Level}),
+    check_config({inet_family, InetFamily}),
     {ok,Address} = inet:getaddr(Host,InetFamily),
 
     % active=false since we never want to receive.  Buffer will fill and packets

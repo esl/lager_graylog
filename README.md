@@ -116,6 +116,21 @@ Example configuration:
 [{metadata, all}, {include_default_ts, false}, {override_host, "my-chosen-hostname"}]
 ```
 
+## Contributing
+
+Pull requests are most welcome. If you have any questions, bug reports or feature proposals just
+[open an issue](https://github.com/esl/lager_graylog/issues/new).
+
+The project is developed using rebar3:
+* run `rebar3 compile` to compile the source code
+* run `rebar3 ct` to test it
+* run `rebar3 dialyzer` to perform Dialyzer checks
+
+
+Any new piece of code should be reasonably tested and covered by type specs. And again, if you have
+any questions or are struggling with implementing a new feature, just open an issue and we'll try
+to help :slightly_smiling_face:.
+
 ## License
 
 Copyright 2018 Erlang Solutions

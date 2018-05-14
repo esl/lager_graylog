@@ -53,16 +53,11 @@ handle_event({log, Message}, #{name := Name,
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
             FormattedLog = Formatter:format(Message, FormatterConfig),
-            case gen_udp:send(Socket, Host, Port, FormattedLog) of
-                ok ->
-                    {ok, State};
-                {error, Reason} ->
-                    lager:error("Couldn't send log payload: ~p", [Reason]),
-                    {ok, State}
-            end;
+            gen_udp:send(Socket, Host, Port, FormattedLog);
         false ->
-            {ok, State}
-    end.
+            ok
+    end,
+    {ok, State}.
 
 handle_info(_, State) ->
     {ok, State}.
@@ -81,9 +76,10 @@ open_socket_and_init_state(Config) ->
     #{level := Mask,
       host := Host,
       port := Port,
+      address_family := AddressFamily,
       formatter := Formatter,
       formatter_config := FormatterConfig} = Config,
-    case gen_udp:open(0, [binary, {active, false}]) of
+    case gen_udp:open(0, [binary, {active, false} | extra_open_opts(AddressFamily)]) of
         {ok, Socket} ->
             State = #{name => {?MODULE, {Host, Port}},
                       level => Mask,
@@ -97,3 +93,7 @@ open_socket_and_init_state(Config) ->
             {error, {gen_udp_open_failed, Reason}}
     end.
 
+-spec extra_open_opts(lager_graylog:address_family()) -> [inet:address_family()].
+extra_open_opts(undefined) -> [];
+extra_open_opts(inet) -> [inet];
+extra_open_opts(inet6) -> [inet6].

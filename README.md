@@ -32,6 +32,9 @@ options are supported:
   formatting log messages before sending to Graylog
 * `formatter_config` - (**optional**, default: `[]`) - passed as a second argument to formatter's
   `format/2` function
+* `address_family` (**optional**, default: `undefined`) - forces the backend to use specific IP
+  protocol version. `inet` stands for IPv4, `inet6` for IPv6, and `undefined` means that suitable
+  version will be chosen for you by the system. In most cases you won't need to set this option.
 
 ### UDP backend
 

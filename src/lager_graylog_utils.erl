@@ -8,6 +8,7 @@
 -type common_config() :: #{level := lager_graylog:mask(),
                            host := lager_graylog:host(),
                            port := lager_graylog:port_number(),
+                           address_family := lager_graylog:address_family(),
                            formatter := module(),
                            formatter_config := any()}.
 
@@ -25,15 +26,17 @@ validate_loglevel(Level) ->
 
 -spec parse_common_opts([{atom(), any()}]) -> {ok, common_config()} | {error, term()}.
 parse_common_opts(Opts) when is_list(Opts) ->
-    Level        = proplists:get_value(level, Opts, info),
-    Host         = proplists:get_value(host, Opts),
-    Port         = proplists:get_value(port, Opts),
+    Level           = proplists:get_value(level, Opts, info),
+    Host            = proplists:get_value(host, Opts),
+    Port            = proplists:get_value(port, Opts),
+    AddressFamily   = proplists:get_value(address_family, Opts),
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
 
     OptsWithDefaults = [{level, Level},
                         {host, Host},
                         {port, Port},
+                        {address_family, AddressFamily},
                         {formatter, Formatter},
                         {formatter_config, FormatterConfig}],
     validate_config_values(OptsWithDefaults, #{}).
@@ -63,6 +66,10 @@ validate_config_value(port, P) when not is_integer(P) ->
     {error, {invalid_port, P}};
 validate_config_value(port, P) when P < 1 orelse P > 65536 ->
     {error, {invalid_port, P}};
+validate_config_value(address_family, Family) when Family =/= undefined,
+                                                   Family =/= inet,
+                                                   Family =/= inet6 ->
+    {error, {invalid_address_family, Family}};
 validate_config_value(level, L) ->
      case validate_loglevel(L) of
         {ok, Mask} ->

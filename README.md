@@ -1,4 +1,4 @@
-## lager_graylog
+# lager_graylog
 
 [![Build Status](https://travis-ci.org/esl/lager_graylog.svg?branch=master)](https://travis-ci.org/esl/lager_graylog)
 
@@ -6,7 +6,7 @@ This application provides lager backends for sending log messages to [Graylog](h
 over UDP or TCP, and the formatter module which spits out logs in [GELF](http://docs.graylog.org/en/stable/pages/gelf.html)
 format.
 
-### TCP backend
+## TCP backend
 
 When you need a reliable log delivery, you can use the backend which connects to Graylog using TCP.
 This backend will also try to reconnect to Graylog indefinitely (with backoff) in case of connection
@@ -36,7 +36,7 @@ options are supported:
   protocol version. `inet` stands for IPv4, `inet6` for IPv6, and `undefined` means that suitable
   version will be chosen for you by the system. In most cases you won't need to set this option.
 
-### UDP backend
+## UDP backend
 
 If you care more about speed than reliability of delivery, you can use UDP-based backend.
 
@@ -51,13 +51,13 @@ To use it, just declare it in your lager config:
 
 It accepts exactly the same set of options as TCP backend.
 
-#### Chunking & compression
+### Chunking & compression
 
 This backend currently doesn't support neither [chunking](http://docs.graylog.org/en/2.4/pages/gelf.html#chunking)
 nor [compression](http://docs.graylog.org/en/2.4/pages/gelf.html#compression). This means that too
 big log messages won't be probably received by Graylog due to packet fragmentation.
 
-### GELF formatter
+## GELF formatter
 
 The GELF formatter is implemented by the `lager_graylog_gelf_formatter` module. It formats log
 messages according to GELF version 1.1. The following fields are always included in the message:
@@ -68,7 +68,7 @@ messages according to GELF version 1.1. The following fields are always included
 * `"short_message"` - the log message
 * `"level"` - the log severity formatted as a number as in [syslog](https://en.wikipedia.org/wiki/Syslog#Severity_level)
 
-#### Metadata
+### Metadata
 
 All metadata provided by lager in the log message will be included as additional fields
 (thus prefixed with `_` in the GELF payload). There are a couple things worth mentioning here:
@@ -96,7 +96,7 @@ in the GELF message sent to Graylog:
 | `reference()` | `#Ref<0.4168780290.2597847048.103549>` | `"#Ref<0.4168780290.2597847048.103549>"`  |
 
 
-#### Configuration
+### Configuration
 
 The formatter expects configuration as a list of tuples with atom keys. The following options are
 supported (all of them are optional):
@@ -116,7 +116,7 @@ Example configuration:
 [{metadata, all}, {include_default_ts, false}, {override_host, "my-chosen-hostname"}]
 ```
 
-### License
+## License
 
 Copyright 2018 Erlang Solutions
 

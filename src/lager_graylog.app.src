@@ -2,17 +2,17 @@
 {application, lager_graylog,
  [
   {description, "lager backends sending log messages to Graylog"},
-  {vsn, "0.1.0"},
+  {vsn, "1.0.0"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
-                  backoff
+                  backoff,
+                  jiffy
                  ]},
   {env, []},
-  {maintainers, ["esl", "Heinz N. Gies"]},
+  {maintainers, ["Erlang Solutions", "Heinz N. Gies"]},
   {licenses, ["Apache 2.0"]},
-  {links,[{"Github",
-           "https://github.com/esl/lager_graylog"}]}
+  {links, [{"Github", "https://github.com/esl/lager_graylog"}]}
  ]
 }.

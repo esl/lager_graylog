@@ -6,6 +6,17 @@ This application provides lager backends for sending log messages to [Graylog](h
 over UDP or TCP, and the formatter module which spits out logs in [GELF](http://docs.graylog.org/en/stable/pages/gelf.html)
 format.
 
+## Installation
+
+This library is [available on Hex](https://hex.pm/packages/lager_graylog). Just add it to your
+dependencies!
+
+```
+{deps, [
+  {lager_graylog, "1.0.0"}
+]}.
+```
+
 ## TCP backend
 
 When you need a reliable log delivery, you can use the backend which connects to Graylog using TCP.

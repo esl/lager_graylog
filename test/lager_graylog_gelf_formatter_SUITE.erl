@@ -24,7 +24,8 @@ all() ->
      list_metadata_formatting,
      tuple_metadata_formatting,
      map_metadata_formatting,
-     bitstring_metadata_formatting
+     bitstring_metadata_formatting,
+     formats_iolist_message_correctly
     ].
 
 %% Test cases
@@ -157,6 +158,15 @@ map_metadata_formatting(_Config) ->
 
 bitstring_metadata_formatting(_Config) ->
     assert_metadata_format([{<<1:3>>, <<"<<1:3>>">>}]).
+
+formats_iolist_message_correctly(_Config) ->
+    IolistMsg = ["alice", ["has" | "a"], <<"cat">>, 20],
+    Log = lager_msg:new(IolistMsg, erlang:timestamp(), debug, [], []),
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(iolist_to_binary(IolistMsg), maps:get(<<"short_message">>, Gelf)).
 
 metadata_fun(_) ->
     [{meta, "sample"}].

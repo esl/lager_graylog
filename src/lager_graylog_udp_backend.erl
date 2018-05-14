@@ -53,16 +53,11 @@ handle_event({log, Message}, #{name := Name,
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
             FormattedLog = Formatter:format(Message, FormatterConfig),
-            case gen_udp:send(Socket, Host, Port, FormattedLog) of
-                ok ->
-                    {ok, State};
-                {error, Reason} ->
-                    lager:error("Couldn't send log payload: ~p", [Reason]),
-                    {ok, State}
-            end;
+            gen_udp:send(Socket, Host, Port, FormattedLog);
         false ->
-            {ok, State}
-    end.
+            ok
+    end,
+    {ok, State}.
 
 handle_info(_, State) ->
     {ok, State}.

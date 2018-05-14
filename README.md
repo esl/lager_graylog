@@ -65,9 +65,33 @@ messages according to GELF version 1.1. The following fields are always included
 * `"short_message"` - the log message
 * `"level"` - the log severity formatted as a number as in [syslog](https://en.wikipedia.org/wiki/Syslog#Severity_level)
 
-In addition, all metadata provided by lager in the log message will be included as additional fields
-(thus prefixed with `_`). Please note that this formatter can only format binaries, strings, atoms,
-integers, floats (always formatted with 6 decimal places), references, ports and pids.
+#### Metadata
+
+All metadata provided by lager in the log message will be included as additional fields
+(thus prefixed with `_` in the GELF payload). There are a couple things worth mentioning here:
+
+* Metadata keys have to be either atoms, binaries or iolists (including simple strings).
+* allowed characters in metadata keys are letters, numbers, underscores, dashes and dots. Note that
+  the formatter won't validate the keys: make sure that they consist of valid characters or
+  otherwise you might experience problems with Graylog.
+* It is recommended to not include `id` metadata key  because Graylog server will ignore it anyway.
+
+Below you can find the table showing how metadata values on the Erlang side map to the JSON values
+in the GELF message sent to Graylog:
+
+| type          | Erlang                                 | GELF                                      |
+|---------------|----------------------------------------|-------------------------------------------|
+| `atom()`      | `atom`                                 | `"atom"`                                  |
+| `integer()`   | `23`                                   | `23`                                      |
+| `float()`     | `1.23`                                 | `1.23`                                    |
+| `binary()`    | `<<"alice has a cat">>`; `<<1, 2, 3>>` | `"<<\"alice has a cat\">>"; "<<1,2,3>>"`  |
+| `list()`      | `"alice has a cat"`; `[1, 2, 3]`       | `"\"alice has a cat\""`; `"[1,2,3]"`      |
+| `bitstring()` | `<<1:3>>`                              | `"<<1:3>>"`                               |
+| `tuple()`     | `{1, 2, 3}`                            | `"{1,2,3}"`                               |
+| `map()`       | `#{alice => "has a cat"}`              | `"#{alice => \"has a cat\"}"`             |
+| `pid()`       | `<0.68.0>`                             | `"<0.68.0>"`                              |
+| `reference()` | `#Ref<0.4168780290.2597847048.103549>` | `"#Ref<0.4168780290.2597847048.103549>"`  |
+
 
 #### Configuration
 

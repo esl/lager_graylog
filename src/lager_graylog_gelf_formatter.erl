@@ -9,19 +9,21 @@
                 | {override_host, string() | binary()}.
 
 -type severity_int() :: 0..7.
--type formattable_term() :: binary()
-                          | string()
-                          | atom()
-                          | integer()
-                          | float()
-                          | reference()
-                          | port()
-                          | pid().
--type key() :: formattable_term().
--type val() :: formattable_term().
--type kv() :: {key(), val()}.
+-type metadata_key() :: atom().
+-type metadata_val() :: binary()
+             | atom()
+             | integer()
+             | float()
+             | reference()
+             | port()
+             | pid()
+             | list()
+             | tuple()
+             | map()
+             | bitstring().
+-type metadata_kv() :: {metadata_key(), metadata_val()}.
 
--define(GELF_VERSION, "1.1").
+-define(GELF_VERSION, <<"1.1">>).
 
 %% API
 
@@ -33,32 +35,34 @@ format(Message, Opts) ->
     Metadata = extract_metadata(Message, Opts),
     Props0 = [{<<"version">>, ?GELF_VERSION},
               {<<"host">>, Host},
-              {<<"short_message">>, ShortMessage},
-              {<<"level">>, Level} | format_metadata_keys(Metadata)],
+              {<<"short_message">>, iolist_to_binary(ShortMessage)},
+              {<<"level">>, Level} | prepare_metadata(Metadata)],
     TsProps = timestamp_prop(lager_msg:timestamp(Message), Opts),
     Props1 = lists:flatten([TsProps | Props0]),
-    [${, lists:join($,, [format_prop(K, V) || {K, V} <- Props1]) ,$}].
+    jiffy:encode({Props1}).
 
 %% Helpers
 
--spec get_host([option()]) -> val().
+-spec get_host([option()]) -> binary().
 get_host(Opts) ->
-	case proplists:lookup(override_host, Opts) of
-        {override_host, Host} ->
-            Host;
-        _ ->
-            {ok, Host} = inet:gethostname(),
-            Host
-    end.
+    Host =
+        case proplists:lookup(override_host, Opts) of
+            {override_host, OverridenHost} ->
+                OverridenHost;
+            _ ->
+                {ok, InetHost} = inet:gethostname(),
+                InetHost
+        end,
+    iolist_to_binary(io_lib:format("~s", [Host])).
 
--spec timestamp_prop(erlang:timestamp(), [option()]) -> [kv()].
+-spec timestamp_prop(erlang:timestamp(), [option()]) -> [{binary(), float()}].
 timestamp_prop(Timestamp, Opts) ->
     case proplists:get_value(include_timestamp, Opts, true) of
        true  -> [{<<"timestamp">>, erlang_ts_to_gelf_ts(Timestamp)}];
        false -> []
     end.
 
--spec extract_metadata(lager_msg:lager_msg(), [option()]) -> [kv()].
+-spec extract_metadata(lager_msg:lager_msg(), [option()]) -> [metadata_kv()].
 extract_metadata(Message, Opts) ->
 	AllMetadata = lager_msg:metadata(Message),
     case proplists:get_value(metadata, Opts, all) of
@@ -75,34 +79,19 @@ extract_metadata(Message, Opts) ->
                         end, [], Keys)
     end.
 
--spec format_metadata_keys([kv()]) -> [{iodata(), val()}].
-format_metadata_keys(Metadata) ->
-    [{format_metadata_key(K), V} || {K, V} <- Metadata].
+-spec prepare_metadata([metadata_kv()]) -> [{binary(), binary() | atom() | number()}].
+prepare_metadata(Metadata) ->
+    [{prepare_metadata_key(K), prepare_metadata_val(V)} || {K, V} <- Metadata].
 
--spec format_metadata_key(key()) -> iodata().
-format_metadata_key(Key) ->
-    [$_, term_to_bin(Key)].
+-spec prepare_metadata_key(metadata_key()) -> binary().
+prepare_metadata_key(Key) ->
+    iolist_to_binary(io_lib:format("_~s", [Key])).
 
--spec term_to_bin(formattable_term()) -> binary().
-term_to_bin(Term) when is_binary(Term) -> Term;
-term_to_bin(Term) when is_list(Term) -> list_to_binary(Term);
-term_to_bin(Term) when is_atom(Term) -> atom_to_binary(Term, utf8);
-term_to_bin(Term) when is_integer(Term) -> integer_to_binary(Term);
-term_to_bin(Term) when is_float(Term) -> float_to_binary(Term, [{decimals, 6}, compact]);
-term_to_bin(Term) when is_reference(Term) -> list_to_binary(erlang:ref_to_list(Term));
-term_to_bin(Term) when is_port(Term) -> list_to_binary(erlang:port_to_list(Term));
-term_to_bin(Term) when is_pid(Term) -> list_to_binary(pid_to_list(Term)).
-
-
--spec format_prop(iodata(), val()) -> iodata().
-format_prop(FormattedKey, Val) ->
-    [$", FormattedKey, $", $:, format_val(Val)].
-
--spec format_val(val()) -> iodata().
-format_val(Val) when is_integer(Val) orelse is_float(Val) ->
-    term_to_bin(Val);
-format_val(Val) ->
-    [$", term_to_bin(Val), $"].
+-spec prepare_metadata_val(metadata_val()) -> binary() | atom() | number().
+prepare_metadata_val(Term) when is_atom(Term) -> Term;
+prepare_metadata_val(Term) when is_number(Term) -> Term;
+prepare_metadata_val(Term) ->
+    iolist_to_binary(io_lib:format("~p", [Term])).
 
 -spec severity_to_int(lager:log_level()) -> severity_int().
 severity_to_int(none) -> 0;

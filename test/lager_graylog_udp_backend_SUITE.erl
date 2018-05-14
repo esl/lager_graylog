@@ -85,7 +85,7 @@ open() ->
 -spec flush(gen_udp:socket()) -> [map()].
 flush(Socket) ->
     Packets = recv(Socket),
-    [jsx:decode(Packet, [return_maps]) || Packet <- Packets].
+    [jiffy:decode(Packet, [return_maps]) || Packet <- Packets].
 
 -spec recv(gen_udp:socket()) -> ok.
 recv(Socket) ->

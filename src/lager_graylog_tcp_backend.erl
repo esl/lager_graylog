@@ -25,6 +25,7 @@
 
 %% gen_event callbacks
 
+-spec init([lager_graylog:backend_option()]) -> {ok, state()} | {error, {invalid_opts, term()}}.
 init(Opts) ->
     case lager_graylog_utils:parse_common_opts(Opts) of
         {ok, Config} ->

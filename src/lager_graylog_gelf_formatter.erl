@@ -2,6 +2,12 @@
 
 -export([format/2]).
 
+-export_type([option/0]).
+
+-type option() :: {metadata, all | [atom()], {module(), Function :: atom()}}
+                | {include_timestamp, boolean()}
+                | {override_host, string() | binary()}.
+
 -type severity_int() :: 0..7.
 -type formattable_term() :: binary()
                           | string()
@@ -19,7 +25,7 @@
 
 %% API
 
--spec format(lager_msg:lager_msg(), list()) -> iodata().
+-spec format(lager_msg:lager_msg(), [option()]) -> iodata().
 format(Message, Opts) ->
 	Host = get_host(Opts),
     ShortMessage = lager_msg:message(Message),
@@ -35,7 +41,7 @@ format(Message, Opts) ->
 
 %% Helpers
 
--spec get_host(list()) -> val().
+-spec get_host([option()]) -> val().
 get_host(Opts) ->
 	case proplists:lookup(override_host, Opts) of
         {override_host, Host} ->
@@ -45,14 +51,14 @@ get_host(Opts) ->
             Host
     end.
 
--spec timestamp_prop(erlang:timestamp(), list()) -> [kv()].
+-spec timestamp_prop(erlang:timestamp(), [option()]) -> [kv()].
 timestamp_prop(Timestamp, Opts) ->
     case proplists:get_value(include_timestamp, Opts, true) of
        true  -> [{<<"timestamp">>, erlang_ts_to_gelf_ts(Timestamp)}];
        false -> []
     end.
 
--spec extract_metadata(lager_msg:lager_msg(), list()) -> [kv()].
+-spec extract_metadata(lager_msg:lager_msg(), [option()]) -> [kv()].
 extract_metadata(Message, Opts) ->
 	AllMetadata = lager_msg:metadata(Message),
     case proplists:get_value(metadata, Opts, all) of

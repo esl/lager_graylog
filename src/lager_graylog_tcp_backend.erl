@@ -13,8 +13,8 @@
 -define(BACKOFF_MAX, 30).
 
 -type name() :: {?MODULE, {lager_graylog:host(), lager_graylog:port_number()}}.
--type socket() :: disconnected | {connected, gen_tcp:socket()}.
--type extra_connect_opts() :: [inet:address_family()].
+-type socket() :: disconnected | {connected, gen_tcp:socket() | ssl:socket()}.
+-type extra_connect_opts() :: [inet:address_family() | lager_graylog:extra_connect_opts()].
 -type state() :: #{name               := name(),
                    level              := lager_graylog_utils:mask(),
                    host               := lager_graylog:host(),
@@ -24,7 +24,8 @@
                    backoff            := backoff:backoff(),
                    formatter          := module(),
                    formatter_config   := any(),
-                   formatter_state    := any()
+                   formatter_state    := any(),
+                   transport          := lager_graylog:transport()
                   }.
 
 %% gen_event callbacks
@@ -38,12 +39,15 @@ init(Opts) ->
               port := Port,
               address_family := AddressFamily,
               formatter := Formatter,
-              formatter_config := FormatterConfig} = Config,
+              formatter_config := FormatterConfig,
+              transport := Transport,
+              extra_connect_opts := ExtraConnectOpts} = Config,
             State = #{name => {?MODULE, {Host, Port}},
                       level => Mask,
                       host => Host,
                       port => Port,
-                      extra_connect_opts => extra_connect_opts(AddressFamily),
+                      transport => Transport,
+                      extra_connect_opts => extra_connect_opts(AddressFamily, ExtraConnectOpts),
                       socket => disconnected,
                       backoff => backoff:type(backoff:init(?BACKOFF_START, ?BACKOFF_MAX), jitter),
                       formatter => Formatter,
@@ -69,6 +73,7 @@ handle_call(_Request, State) ->
 
 handle_event({log, Message}, #{name := Name,
                                level := Mask,
+                               transport := Transport,
                                socket := {connected, Socket},
                                formatter := Formatter,
                                formatter_config := FormatterConfig,
@@ -77,7 +82,7 @@ handle_event({log, Message}, #{name := Name,
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
             FormattedLog = Formatter:format(Message, FormatterState, FormatterConfig),
-            case gen_tcp:send(Socket, [FormattedLog, 0]) of
+            case Transport:send(Socket, [FormattedLog, 0]) of
                 ok ->
                     {ok, State};
                 {error, Reason} ->
@@ -112,9 +117,10 @@ code_change(_OldVsn, State, _Extra) ->
 try_connect(#{socket := disconnected,
               host := Host,
               port := Port,
+              transport := Transport,
               extra_connect_opts := ExtraConnectOpts,
               backoff := Backoff} = State) ->
-    case gen_tcp:connect(Host, Port, [binary, {active, false} | ExtraConnectOpts], 5000) of
+    case Transport:connect(Host, Port, [binary, {active, false} | ExtraConnectOpts], 5000) of
         {ok, Socket} ->
             {_, NewBackoff} = backoff:succeed(Backoff),
             lager:notice("Connected to ~p:~p~n", [Host, Port]),
@@ -132,7 +138,7 @@ set_reconnection_timer(ReconnectInSeconds) ->
     erlang:start_timer(ReconnectInSeconds * 1000, self(), reconnect),
     ok.
 
--spec extra_connect_opts(lager_graylog:address_family()) -> extra_connect_opts().
-extra_connect_opts(undefined) -> [];
-extra_connect_opts(inet) -> [inet];
-extra_connect_opts(inet6) -> [inet6].
+-spec extra_connect_opts(lager_graylog:address_family(), [ssl:tls_option()]) -> extra_connect_opts().
+extra_connect_opts(undefined, ExtraConnectOpts) -> ExtraConnectOpts;
+extra_connect_opts(inet, ExtraConnectOpts) -> [inet | ExtraConnectOpts];
+extra_connect_opts(inet6, ExtraConnectOpts) -> [inet6 | ExtraConnectOpts].

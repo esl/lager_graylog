@@ -46,6 +46,28 @@ options are supported:
 * `address_family` (**optional**, default: `undefined`) - forces the backend to use specific IP
   protocol version. `inet` stands for IPv4, `inet6` for IPv6, and `undefined` means that suitable
   version will be chosen for you by the system. In most cases you won't need to set this option.
+* `transport` (**optional**, default: `gen_tcp`) - module to connect to Graylog and send messages.
+* `extra_connect_opts` (**optional**, default: `[]`) - passed to the `connect/4` method of the
+  `transport` module. It can be a list of
+  [TCP Connect Options](https://erlang.org/doc/man/gen_tcp.html#type-connect_option)
+  or [TLS Client Options](https://erlang.org/doc/man/ssl.html#type-tls_client_option).
+  
+### SSL/TLS
+
+Here's an examlpe if you'd like to have your logs encrypted during transfer:
+
+```
+[{lager, [{handlers, [{lager_graylog_tcp_backend, [{host, "graylog-hostname"},
+                                                   {port, 12201},
+                                                   {transport, ssl},
+                                                   {extra_connect_opts, [
+                                                       {certfile, "/path/to/some.crt"},
+                                                       {keyfile, "/path/to/some.key"},
+                                                       {cacertfile, "/path/to/some-ca.crt"},
+                                                       {verify, verify_none}]}]
+}]}]}].
+```
+
 
 ## UDP backend
 

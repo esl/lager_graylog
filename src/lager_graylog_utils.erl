@@ -32,13 +32,15 @@ parse_common_opts(Opts) when is_list(Opts) ->
     AddressFamily   = proplists:get_value(address_family, Opts),
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
+    TOpts = proplists:get_value(transport_opts, Opts, []),
 
     OptsWithDefaults = [{level, Level},
                         {host, Host},
                         {port, Port},
                         {address_family, AddressFamily},
                         {formatter, Formatter},
-                        {formatter_config, FormatterConfig}],
+                        {formatter_config, FormatterConfig},
+        {transport_opts, TOpts}],
     validate_config_values(OptsWithDefaults, #{}).
 
 %% Helpers

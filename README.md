@@ -46,6 +46,30 @@ options are supported:
 * `address_family` (**optional**, default: `undefined`) - forces the backend to use specific IP
   protocol version. `inet` stands for IPv4, `inet6` for IPv6, and `undefined` means that suitable
   version will be chosen for you by the system. In most cases you won't need to set this option.
+  
+## SSL/TLS backend
+
+```
+{lager, [
+        {log_root, "log"},
+        {handlers, [
+            {lager_console_backend, debug},
+            {lager_file_backend, [{file, "error.log"}, {level, error}]},
+            {lager_file_backend, [{file, "console.log"}, {level, info}]},
+            {lager_graylog_ssl_backend, [
+                {level, info},
+                {host, "graylog-hostname"},
+                {port, 12201},
+                {transport_opts, [
+                        {certfile, "/path/to/some.crt"},
+                        {keyfile, "/path/to/some.key"},
+                        {cacertfile, "/path/to/some-ca.crt"},
+                        {verify, verify_none}
+                ]}
+            ]}
+        ]}
+    ]}
+```
 
 ## UDP backend
 

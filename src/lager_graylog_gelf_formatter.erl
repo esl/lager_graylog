@@ -28,7 +28,7 @@ format(Message, _State, Opts) ->
     Metadata = extract_metadata(Message, Opts),
     Props0 = [{<<"version">>, ?GELF_VERSION},
               {<<"host">>, Host},
-              {<<"short_message">>, iolist_to_binary(ShortMessage)},
+              {<<"short_message">>, to_unicode_safe(ShortMessage)},
               {<<"level">>, Level} |
               lager_graylog_gelf_utils:prepare_metadata(Metadata)],
     TsProps = timestamp_prop(lager_msg:timestamp(Message), Opts),
@@ -65,12 +65,12 @@ timestamp_prop(Timestamp, Opts) ->
 -spec extract_metadata(lager_msg:lager_msg(), [option()]) ->
                               [lager_graylog_gelf_utils:metadata_kv()].
 extract_metadata(Message, Opts) ->
-	AllMetadata = lager_msg:metadata(Message),
+    AllMetadata = lager_msg:metadata(Message),
     case proplists:get_value(metadata, Opts, all) of
         all ->
             AllMetadata;
         {Mod, Fun} when is_atom(Mod) andalso is_atom(Fun) ->
-	        Mod:Fun(Message);
+            Mod:Fun(Message);
         Keys when is_list(Keys) ->
             lists:foldl(fun(K, Acc) ->
                             case proplists:lookup(K, AllMetadata) of
@@ -79,7 +79,6 @@ extract_metadata(Message, Opts) ->
                             end
                         end, [], Keys)
     end.
-
 
 -spec on_encode_failure([option()]) -> crash | binary().
 on_encode_failure(Opts) ->
@@ -105,4 +104,33 @@ safely_encode(Props, OnFailMessage) ->
             encode(Props1);
         Encoded ->
             Encoded
+    end.
+
+to_unicode_safe(Message) when is_binary(Message) -> Message;
+to_unicode_safe(Message) ->
+    case unicode:characters_to_binary(Message) of
+        {error, _, _} when is_list(Message) ->
+            RepairedIOList = [try_repair_encode(Chunk) || Chunk <- Message],
+            case unicode:characters_to_binary(RepairedIOList) of
+                {error, _, _} ->
+                    error_encode(Message);
+                {incomplete, _, _} ->
+                    error_encode(Message);
+                Ok ->
+                    Ok
+            end;
+        {incomplete, _, _} ->
+            error_encode(Message);
+        Ok -> Ok
+    end.
+
+error_encode(Message) ->
+    unicode:characters_to_binary(io_lib:format("ENCODE ERROR: ~w", [Message])).
+
+try_repair_encode(Chunk) ->
+    if
+        is_binary(Chunk) ->
+            io_lib:format("~w", [Chunk]);
+        true ->
+            Chunk
     end.

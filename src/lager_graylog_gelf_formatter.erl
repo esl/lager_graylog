@@ -6,7 +6,8 @@
 
 -type option() :: {metadata, all | [atom()], {module(), Function :: atom()}}
                 | {include_timestamp, boolean()}
-                | {override_host, string() | binary()}.
+                | {override_host, string() | binary()}
+                | {on_encode_failure, crash | string() | binary()}.
 
 -type severity_int() :: 0..7.
 -type metadata_key() :: atom().
@@ -39,7 +40,12 @@ format(Message, Opts) ->
               {<<"level">>, Level} | prepare_metadata(Metadata)],
     TsProps = timestamp_prop(lager_msg:timestamp(Message), Opts),
     Props1 = lists:flatten([TsProps | Props0]),
-    jiffy:encode({Props1}).
+    case on_encode_failure(Opts) of
+        crash ->
+            encode(Props1);
+        OnFailMessage ->
+            safely_encode(Props1, OnFailMessage)
+    end.
 
 %% Helpers
 
@@ -108,3 +114,28 @@ severity_to_int(debug) -> 7.
 erlang_ts_to_gelf_ts({MegaSecs, Secs, MicroSecs}) ->
     (MegaSecs * 1000000) + Secs + (MicroSecs / 1000000).
 
+-spec on_encode_failure([option()]) -> crash | binary().
+on_encode_failure(Opts) ->
+    case proplists:get_value(on_encode_failure, Opts, crash) of
+        crash ->
+            crash;
+        OnFailMessage when is_binary(OnFailMessage) ->
+            OnFailMessage;
+        OnFailMessage when is_list(OnFailMessage) ->
+            list_to_binary(OnFailMessage)
+    end.
+
+-spec encode([tuple()]) -> binary() | no_return().
+encode(Props) ->
+    jiffy:encode({Props}).
+
+-spec safely_encode([tuple()], OnFailMessage :: binary()) -> binary().
+safely_encode(Props, OnFailMessage) ->
+    case catch encode(Props) of
+        {error, _} ->
+            Props1 = lists:keyreplace(<<"short_message">>, 1, Props, {<<"short_message">>,
+                                      OnFailMessage}),
+            encode(Props1);
+        Encoded ->
+            Encoded
+    end.

@@ -120,11 +120,19 @@ supported (all of them are optional):
   containing the timestamp in seconds with 6 decimal places. Note that Graylog will generate timestamp
   itself when this field is not present in the payload
 * `override_host` - if set, the `"host"` field in the GELF message will have the configured value
+* `on_encode_failure` (default: `crash`) - controls the behaviour of the formatter when encoding fails.
+  Possible values are:
+  * `crash` - formatting throws an error
+  * string or binary - formatter replaces given log message with configured value and retries the
+    formatting. Note that if the second attempt fails, the error will be thrown anyway
 
 Example configuration:
 
 ```erlang
-[{metadata, all}, {include_default_ts, false}, {override_host, "my-chosen-hostname"}]
+[{metadata, all},
+ {include_default_ts, false},
+ {override_host, "my-chosen-hostname"},
+ {on_encode_failure, "Encoding log message as GELF failed"}]
 ```
 
 ## Contributing

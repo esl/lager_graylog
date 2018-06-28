@@ -25,7 +25,11 @@ all() ->
      tuple_metadata_formatting,
      map_metadata_formatting,
      bitstring_metadata_formatting,
-     formats_iolist_message_correctly
+     formats_iolist_message_correctly,
+     on_encode_failure_crashes,
+     on_encode_failure_returns_configured_string,
+     on_encode_failure_returns_configured_binary,
+     on_encode_failure_crashes_if_second_encode_crashes_too
     ].
 
 %% Test cases
@@ -167,6 +171,39 @@ formats_iolist_message_correctly(_Config) ->
 
     Gelf = decode(Formatted),
     ?assertEqual(iolist_to_binary(IolistMsg), maps:get(<<"short_message">>, Gelf)).
+
+
+on_encode_failure_crashes(Config) ->
+    Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
+    Opts = [{on_encode_failure, crash}],
+
+    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, Opts)).
+
+on_encode_failure_returns_configured_string(Config) ->
+    Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
+    OnFailMessage = "Encoding GELF failed",
+    Opts = [{on_encode_failure, OnFailMessage}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(list_to_binary(OnFailMessage), maps:get(<<"short_message">>, Gelf)).
+
+on_encode_failure_returns_configured_binary(Config) ->
+    Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
+    OnFailMessage = <<"Encoding GELF failed">>,
+    Opts = [{on_encode_failure, OnFailMessage}],
+
+    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+
+    Gelf = decode(Formatted),
+    ?assertEqual(OnFailMessage, maps:get(<<"short_message">>, Gelf)).
+
+on_encode_failure_crashes_if_second_encode_crashes_too(Config) ->
+    Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
+    Opts = [{on_encode_failure, <<"this message is invalid, too :( ·">>}],
+
+    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, Opts)).
 
 metadata_fun(_) ->
     [{meta, "sample"}].

@@ -13,7 +13,7 @@ dependencies!
 
 ```
 {deps, [
-  {lager_graylog, "1.0.0"}
+  {lager_graylog, "1.1.0"}
 ]}.
 ```
 

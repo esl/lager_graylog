@@ -7,6 +7,8 @@
 
 -export_type([option/0]).
 
+-behaviour(lager_graylog_gelf_formatter_behaviour).
+
 -type option() :: {metadata, all | [atom()], {module(), Function :: atom()}}
                 | {include_timestamp, boolean()}
                 | {override_host, string() | binary()}

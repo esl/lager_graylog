@@ -9,21 +9,6 @@
                 | {override_host, string() | binary()}
                 | {on_encode_failure, crash | string() | binary()}.
 
--type severity_int() :: 0..7.
--type metadata_key() :: atom().
--type metadata_val() :: binary()
-             | atom()
-             | integer()
-             | float()
-             | reference()
-             | port()
-             | pid()
-             | list()
-             | tuple()
-             | map()
-             | bitstring().
--type metadata_kv() :: {metadata_key(), metadata_val()}.
-
 -define(GELF_VERSION, <<"1.1">>).
 
 %% API
@@ -32,12 +17,13 @@
 format(Message, Opts) ->
 	Host = get_host(Opts),
     ShortMessage = lager_msg:message(Message),
-    Level = severity_to_int(lager_msg:severity(Message)),
+    Level = lager_graylog_gelf_utils:severity_to_int(lager_msg:severity(Message)),
     Metadata = extract_metadata(Message, Opts),
     Props0 = [{<<"version">>, ?GELF_VERSION},
               {<<"host">>, Host},
               {<<"short_message">>, iolist_to_binary(ShortMessage)},
-              {<<"level">>, Level} | prepare_metadata(Metadata)],
+              {<<"level">>, Level} |
+              lager_graylog_gelf_utils:prepare_metadata(Metadata)],
     TsProps = timestamp_prop(lager_msg:timestamp(Message), Opts),
     Props1 = lists:flatten([TsProps | Props0]),
     case on_encode_failure(Opts) of
@@ -64,11 +50,13 @@ get_host(Opts) ->
 -spec timestamp_prop(erlang:timestamp(), [option()]) -> [{binary(), float()}].
 timestamp_prop(Timestamp, Opts) ->
     case proplists:get_value(include_timestamp, Opts, true) of
-       true  -> [{<<"timestamp">>, erlang_ts_to_gelf_ts(Timestamp)}];
-       false -> []
+        true  ->
+            [{<<"timestamp">>, lager_graylog_gelf_utils:erlang_ts_to_gelf_ts(Timestamp)}];
+        false -> []
     end.
 
--spec extract_metadata(lager_msg:lager_msg(), [option()]) -> [metadata_kv()].
+-spec extract_metadata(lager_msg:lager_msg(), [option()]) ->
+                              [lager_graylog_gelf_utils:metadata_kv()].
 extract_metadata(Message, Opts) ->
 	AllMetadata = lager_msg:metadata(Message),
     case proplists:get_value(metadata, Opts, all) of
@@ -85,34 +73,6 @@ extract_metadata(Message, Opts) ->
                         end, [], Keys)
     end.
 
--spec prepare_metadata([metadata_kv()]) -> [{binary(), binary() | atom() | number()}].
-prepare_metadata(Metadata) ->
-    [{prepare_metadata_key(K), prepare_metadata_val(V)} || {K, V} <- Metadata].
-
--spec prepare_metadata_key(metadata_key()) -> binary().
-prepare_metadata_key(Key) ->
-    iolist_to_binary(io_lib:format("_~s", [Key])).
-
--spec prepare_metadata_val(metadata_val()) -> binary() | atom() | number().
-prepare_metadata_val(Term) when is_atom(Term) -> Term;
-prepare_metadata_val(Term) when is_number(Term) -> Term;
-prepare_metadata_val(Term) ->
-    iolist_to_binary(io_lib:format("~p", [Term])).
-
--spec severity_to_int(lager:log_level()) -> severity_int().
-severity_to_int(none) -> 0;
-severity_to_int(emergency) -> 0;
-severity_to_int(alert) -> 1;
-severity_to_int(critical) -> 2;
-severity_to_int(error) -> 3;
-severity_to_int(warning) -> 4;
-severity_to_int(notice) -> 5;
-severity_to_int(info) -> 6;
-severity_to_int(debug) -> 7.
-
--spec erlang_ts_to_gelf_ts(erlang:timestamp()) -> float().
-erlang_ts_to_gelf_ts({MegaSecs, Secs, MicroSecs}) ->
-    (MegaSecs * 1000000) + Secs + (MicroSecs / 1000000).
 
 -spec on_encode_failure([option()]) -> crash | binary().
 on_encode_failure(Opts) ->

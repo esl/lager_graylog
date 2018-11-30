@@ -23,7 +23,9 @@
                    socket             := socket(),
                    backoff            := backoff:backoff(),
                    formatter          := module(),
-                   formatter_config   := any()}.
+                   formatter_config   := any(),
+                   formatter_state    := any()
+                  }.
 
 %% gen_event callbacks
 
@@ -45,7 +47,9 @@ init(Opts) ->
                       socket => disconnected,
                       backoff => backoff:type(backoff:init(?BACKOFF_START, ?BACKOFF_MAX), jitter),
                       formatter => Formatter,
-                      formatter_config => FormatterConfig},
+                      formatter_config => FormatterConfig,
+                      formatter_state => Formatter:init(FormatterConfig)
+                     },
             {ok, try_connect(State)};
         {error, Reason} ->
             {error, {invalid_opts, Reason}}
@@ -67,10 +71,12 @@ handle_event({log, Message}, #{name := Name,
                                level := Mask,
                                socket := {connected, Socket},
                                formatter := Formatter,
-                               formatter_config := FormatterConfig} = State) ->
+                               formatter_config := FormatterConfig,
+                               formatter_state := FormatterState
+                              } = State) ->
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
-            FormattedLog = Formatter:format(Message, FormatterConfig),
+            FormattedLog = Formatter:format(Message, FormatterState, FormatterConfig),
             case gen_tcp:send(Socket, [FormattedLog, 0]) of
                 ok ->
                     {ok, State};

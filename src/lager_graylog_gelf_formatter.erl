@@ -1,6 +1,9 @@
 -module(lager_graylog_gelf_formatter).
 
--export([format/2]).
+-export([
+         init/1,
+         format/3
+        ]).
 
 -export_type([option/0]).
 
@@ -13,8 +16,10 @@
 
 %% API
 
--spec format(lager_msg:lager_msg(), [option()]) -> iodata().
-format(Message, Opts) ->
+init(_Opts) -> undefined.
+
+-spec format(lager_msg:lager_msg(), undefined, [option()]) -> iodata().
+format(Message, _State, Opts) ->
 	Host = get_host(Opts),
     ShortMessage = lager_msg:message(Message),
     Level = lager_graylog_gelf_utils:severity_to_int(lager_msg:severity(Message)),

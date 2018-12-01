@@ -1,4 +1,4 @@
--module(lager_graylog_gelf_formatter_behaviour).
+-module(lager_graylog_formatter).
 
 %% Called once on backend process start.
 %% Returned value will be stored in process state and passed to

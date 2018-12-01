@@ -17,7 +17,10 @@ groups() ->
 
 test_cases() ->
     [sends_log_messages_to_configured_endpoint,
-     doesnt_log_over_configured_level
+     doesnt_log_over_configured_level,
+     big_message_should_be_chunked,
+     too_big_message_should_be_dropped,
+     chunks_must_fit_in_specified_size
     ].
 
 init_per_suite(Config) ->
@@ -30,8 +33,9 @@ end_per_suite(_) ->
 
 init_per_testcase(_, Config) ->
     {Socket, Port} = open(),
-    start_lager_handler(Port),
-    [{socket, Socket}, {port, Port} | Config].
+    AdditionalOptions = [{chunk_size, 1472}],
+    start_lager_handler(Port, AdditionalOptions),
+    AdditionalOptions ++ [{socket, Socket}, {port, Port} | Config].
 
 end_per_testcase(_, Config) ->
     stop_lager_handler(?config(port, Config)).
@@ -58,11 +62,43 @@ doesnt_log_over_configured_level(Config) ->
     assert_logged(Logs, [Log1]),
     assert_not_logged(Logs, [Log2]).
 
+big_message_should_be_chunked(Config) ->
+    Socket = ?config(socket, Config),
+    ChunkSize = ?config(chunk_size, Config),
+    BigMessage = generate_message(ChunkSize * 15 + 100),
+    Log1 = log(info, BigMessage),
+    assert_logged([flush_chunked(Socket, 16)], [Log1]).
+
+too_big_message_should_be_dropped(Config) ->
+    Socket = ?config(socket, Config),
+    ChunkSize = ?config(chunk_size, Config),
+    VeryBigMessage = generate_message(ChunkSize * 129),
+    log(info, VeryBigMessage),
+    [#{<<"level">> := 3, <<"_module">> := <<"lager_graylog_udp_backend">>}] = flush(Socket).
+
+chunks_must_fit_in_specified_size(Config) ->
+    Socket = ?config(socket, Config),
+    ChunkSize = ?config(chunk_size, Config),
+    Message = generate_message(ChunkSize * 5 + 100),
+    log(info, Message),
+    Chunks = recv(Socket, 129, 50, []),
+    %% All chunks but last should be fully loaded
+    [_LastChunk] =
+        lists:filter(
+          fun
+              (Chunk) when byte_size(Chunk) =:= ChunkSize -> false;
+              (Chunk) when byte_size(Chunk) < ChunkSize   -> true
+          end, Chunks).
+
 %% Helpers
 
--spec start_lager_handler(inet:port_number()) -> ok.
-start_lager_handler(Port) ->
-    Opts = [{host, ?HOST}, {port, Port}],
+generate_message(Length) ->
+    iolist_to_binary([integer_to_list(crypto:rand_uniform(0, 36), 36) ||
+                         _ <- lists:seq(1, Length)]).
+
+-spec start_lager_handler(inet:port_number(), [lager_graylog:udp_backend_option()]) -> ok.
+start_lager_handler(Port, AdditionalOptions) ->
+    Opts = [{host, ?HOST}, {port, Port} | AdditionalOptions],
     ok = gen_event:add_handler(lager_event, handler_id(Port), Opts).
 
 -spec stop_lager_handler(inet:port_number()) -> ok.
@@ -75,12 +111,31 @@ handler_id(Port) ->
 
 -spec open() -> {gen_udp:socket(), inet:port_number()}.
 open() ->
-    {ok, Socket} = gen_udp:open(0, [binary,
+    {ok, Socket} = gen_udp:open(0, [
+                                    binary,
                                     {ip, ?HOST},
                                     {active, true},
-                                    {reuseaddr, true}]),
+                                    {reuseaddr, true},
+                                    {recbuf, 191100}
+                                   ]),
     {ok, Port} = inet:port(Socket),
     {Socket, Port}.
+
+flush_chunked(Socket, NumberOfChunks) ->
+    Chunks = recv(Socket, 129, 500, []),
+    NumberOfChunks = length(Chunks),
+    DecodedChunks =
+        lists:map(
+          fun(<<30,15, MessageId:8/binary, SequenceNumber:8/integer,
+                ChunksTotal:8/integer, BodyPart/binary>>) ->
+                  {{MessageId, ChunksTotal}, SequenceNumber , BodyPart}
+          end, Chunks),
+    {MessageIdsAndChunkTotals, SequenceNumbers, BodyParts} = lists:unzip3(DecodedChunks),
+    %% all MessageIds and ChunkTotals shold be the same for one message
+    1 = length(lists:usort(MessageIdsAndChunkTotals)),
+    %% we should receive all chunks (possible reordered)
+    true = lists:seq(0, NumberOfChunks - 1) =:= lists:sort(SequenceNumbers),
+    jiffy:decode(BodyParts, [return_maps]).
 
 -spec flush(gen_udp:socket()) -> [map()].
 flush(Socket) ->
@@ -89,26 +144,22 @@ flush(Socket) ->
 
 -spec recv(gen_udp:socket()) -> ok.
 recv(Socket) ->
-    recv(Socket, 10, 10, []).
+    recv(Socket, 10, 50, []).
 
 -spec recv(gen_udp:socket(), Tries :: non_neg_integer(), timeout(), list()) -> [binary()].
 recv(Socket, Tries, Timeout, Acc0) when Tries > 0 ->
-    Acc =
-        receive
-            {udp, Socket, _, _, Packet} ->
-                [Acc0, Packet]
-        after
-            Timeout ->
-                Acc0
-        end,
-    recv(Socket, Tries -  1, Timeout, Acc);
-recv(_Socket, 0, _Timeout, Acc) ->
-    lists:flatten(Acc).
+    receive
+        {udp, Socket, _, _, Packet} ->
+            recv(Socket, Tries -  1, Timeout, [Acc0, Packet])
+    after
+        Timeout -> lists:flatten(Acc0)
+    end;
+recv(_Socket, 0, _Timeout, Acc) -> lists:flatten(Acc).
 
 -spec log(atom(), string()) -> pos_integer().
 log(Level, Message) ->
     LogRef = erlang:unique_integer([positive, monotonic]),
-    lager:log(Level, [{test_log_ref, LogRef}], Message),
+    lager:log_unsafe(Level, [{test_log_ref, LogRef}], Message, []),
     LogRef.
 
 -spec assert_logged([map()], [pos_integer()]) -> ok | no_return().
@@ -140,4 +191,3 @@ assert_not_logged(Logs, LogRefs) ->
         _ ->
             error({found_logs_but_shouldnt, [{log_refs, LogRefs}, {found_logs, FilteredLogs}]})
     end.
-

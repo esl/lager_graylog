@@ -30,7 +30,7 @@ parse_common_opts(Opts) when is_list(Opts) ->
     Host            = proplists:get_value(host, Opts),
     Port            = proplists:get_value(port, Opts),
     AddressFamily   = proplists:get_value(address_family, Opts),
-    Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
+    Formatter       = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
 
     OptsWithDefaults = [{level, Level},
@@ -81,4 +81,3 @@ validate_config_value(formatter, Formatter) when not is_atom(Formatter) ->
     {error, {invalid_formatter, Formatter}};
 validate_config_value(_, _) ->
     ok.
-

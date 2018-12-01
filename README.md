@@ -62,11 +62,18 @@ To use it, just declare it in your lager config:
 
 It accepts exactly the same set of options as TCP backend.
 
-### Chunking & compression
+### Chunking
 
-This backend currently doesn't support neither [chunking](http://docs.graylog.org/en/2.4/pages/gelf.html#chunking)
-nor [compression](http://docs.graylog.org/en/2.4/pages/gelf.html#compression). This means that too
-big log messages won't be probably received by Graylog due to packet fragmentation.
+UDP backend will try to avoid packet fragmentation with using of [chunking](http://docs.graylog.org/en/2.4/pages/gelf.html#chunking).
+Chunk size in bytes can be configured with `chunk_size` option (**optional**, default: `1472` minimum: `300`),
+According to GELF protocol, maximum number of allowed chunks is 128.
+Please, keep in mind that each chunk also has a fixed 12 bytes headers part,
+so maximum allowed size of log message equal to (`chunk_size` - 12) x 128.
+If message will not fit in that size, it will be dropped and
+error log with some debug info about initial message will be sent instead.
+
+### Compression
+This backend currently doesn't support [compression](http://docs.graylog.org/en/2.4/pages/gelf.html#compression).
 
 ## GELF formatter
 

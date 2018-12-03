@@ -17,7 +17,9 @@
                    port          := lager_graylog:port_number(),
                    socket        := socket(),
                    formatter     := module(),
-                   formatter_config := any()}.
+                   formatter_config := any(),
+                   formatter_state := any()
+                  }.
 
 %% gen_event callbacks
 
@@ -49,10 +51,12 @@ handle_event({log, Message}, #{name := Name,
                                port := Port,
                                socket := Socket,
                                formatter := Formatter,
-                               formatter_config := FormatterConfig} = State) ->
+                               formatter_config := FormatterConfig,
+                               formatter_state := FormatterState
+                              } = State) ->
     case lager_util:is_loggable(Message, Mask, Name) of
         true ->
-            FormattedLog = Formatter:format(Message, FormatterConfig),
+            FormattedLog = Formatter:format(Message, FormatterState, FormatterConfig),
             gen_udp:send(Socket, Host, Port, FormattedLog);
         false ->
             ok
@@ -87,7 +91,9 @@ open_socket_and_init_state(Config) ->
                       port => Port,
                       socket => Socket,
                       formatter => Formatter,
-                      formatter_config => FormatterConfig},
+                      formatter_config => FormatterConfig,
+                      formatter_state => Formatter:init(FormatterConfig)
+                     },
             {ok, State};
         {error, Reason} ->
             {error, {gen_udp_open_failed, Reason}}

@@ -40,7 +40,7 @@ formats_log_with_mandatory_attributes(_Config) ->
     {ok, Host} = inet:gethostname(),
     Log = lager_msg:new(Message, Timestamp, debug, [], []),
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, []),
     ct:pal("~s", [Formatted]),
 
     Gelf = decode(Formatted),
@@ -55,7 +55,7 @@ formats_log_with_mandatory_attributes(_Config) ->
 formats_all_metadata_by_default(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [{module, mod}, {line, 99}], []),
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, []),
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"mod">>, maps:get(<<"_module">>, Gelf)),
@@ -65,7 +65,7 @@ formats_only_selected_metadata(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [{module, mod}, {line, 99}], []),
     Opts = [{metadata, [module]}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"mod">>, maps:get(<<"_module">>, Gelf)),
@@ -75,7 +75,7 @@ formats_all_metadata_if_configured(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [{module, mod}, {line, 99}], []),
     Opts = [{metadata, all}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"mod">>, maps:get(<<"_module">>, Gelf)),
@@ -85,7 +85,7 @@ doesnt_format_default_timestamp_if_configured(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
     Opts = [{include_timestamp, false}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertNot(maps:is_key(<<"timestamp">>, Gelf)).
@@ -94,7 +94,7 @@ formats_metadata_using_configured_function(_Config) ->
     Log = lager_msg:new("hello", erlang:timestamp(), debug, [], []),
     Opts = [{metadata, {?MODULE, metadata_fun}}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(<<"\"sample\"">>, maps:get(<<"_meta">>, Gelf)).
@@ -104,7 +104,7 @@ overrides_host_if_configured_as_binary(_Config) ->
     Host = <<"some-host">>,
     Opts = [{override_host, Host}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(Host, maps:get(<<"host">>, Gelf)).
@@ -114,7 +114,7 @@ overrides_host_if_configured_as_string(_Config) ->
     Host = "some-host",
     Opts = [{override_host, Host}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(list_to_binary(Host), maps:get(<<"host">>, Gelf)).
@@ -167,43 +167,43 @@ formats_iolist_message_correctly(_Config) ->
     IolistMsg = ["alice", ["has" | "a"], <<"cat">>, 20],
     Log = lager_msg:new(IolistMsg, erlang:timestamp(), debug, [], []),
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, []),
 
     Gelf = decode(Formatted),
     ?assertEqual(iolist_to_binary(IolistMsg), maps:get(<<"short_message">>, Gelf)).
 
 
-on_encode_failure_crashes(Config) ->
+on_encode_failure_crashes(_Config) ->
     Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
     Opts = [{on_encode_failure, crash}],
 
-    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, Opts)).
+    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, undefined, Opts)).
 
-on_encode_failure_returns_configured_string(Config) ->
+on_encode_failure_returns_configured_string(_Config) ->
     Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
     OnFailMessage = "Encoding GELF failed",
     Opts = [{on_encode_failure, OnFailMessage}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(list_to_binary(OnFailMessage), maps:get(<<"short_message">>, Gelf)).
 
-on_encode_failure_returns_configured_binary(Config) ->
+on_encode_failure_returns_configured_binary(_Config) ->
     Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
     OnFailMessage = <<"Encoding GELF failed">>,
     Opts = [{on_encode_failure, OnFailMessage}],
 
-    Formatted = lager_graylog_gelf_formatter:format(Log, Opts),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, Opts),
 
     Gelf = decode(Formatted),
     ?assertEqual(OnFailMessage, maps:get(<<"short_message">>, Gelf)).
 
-on_encode_failure_crashes_if_second_encode_crashes_too(Config) ->
+on_encode_failure_crashes_if_second_encode_crashes_too(_Config) ->
     Log = lager_msg:new(<<"strange character: ·">>, erlang:timestamp(), debug, [], []),
     Opts = [{on_encode_failure, <<"this message is invalid, too :( ·">>}],
 
-    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, Opts)).
+    ?assertThrow({error, {invalid_string, _}}, lager_graylog_gelf_formatter:format(Log, undefined, Opts)).
 
 metadata_fun(_) ->
     [{meta, "sample"}].
@@ -230,11 +230,9 @@ assert_metadata_format(ValuesWithExpectedFormat) ->
                                            end, MetadataWithExpectedFormat0),
     MetadataToLog = [{Key, Value} || {Key, {Value, _Format}} <- MetadataWithExpectedFormat],
     Log = lager_msg:new("hello", erlang:timestamp(), debug, MetadataToLog, []),
-    Formatted = lager_graylog_gelf_formatter:format(Log, []),
+    Formatted = lager_graylog_gelf_formatter:format(Log, undefined, []),
     Gelf = decode(Formatted),
     lists:foreach(fun({Key, {_Value, ExpectedFormat}}) ->
                       GelfKey = iolist_to_binary(io_lib:format("_~s", [Key])),
                       ?assertEqual(ExpectedFormat, maps:get(GelfKey, Gelf))
                   end, MetadataWithExpectedFormat).
-
-

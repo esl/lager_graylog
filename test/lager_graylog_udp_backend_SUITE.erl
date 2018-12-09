@@ -123,7 +123,6 @@ open() ->
 
 flush_chunked(Socket, NumberOfChunks) ->
     Chunks = recv(Socket, 129, 500, []),
-    NumberOfChunks = length(Chunks),
     DecodedChunks =
         lists:map(
           fun(<<30,15, MessageId:8/binary, SequenceNumber:8/integer,
@@ -135,6 +134,7 @@ flush_chunked(Socket, NumberOfChunks) ->
     1 = length(lists:usort(MessageIdsAndChunkTotals)),
     %% we should receive all chunks (possible reordered)
     true = lists:seq(0, NumberOfChunks - 1) =:= lists:sort(SequenceNumbers),
+    NumberOfChunks = length(Chunks),
     jiffy:decode(BodyParts, [return_maps]).
 
 -spec flush(gen_udp:socket()) -> [map()].

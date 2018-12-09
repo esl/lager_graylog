@@ -33,7 +33,7 @@ end_per_suite(_) ->
 
 init_per_testcase(_, Config) ->
     {Socket, Port} = open(),
-    AdditionalOptions = [{chunk_size, 1472}],
+    AdditionalOptions = [{chunk_size, 1372}],
     start_lager_handler(Port, AdditionalOptions),
     AdditionalOptions ++ [{socket, Socket}, {port, Port} | Config].
 

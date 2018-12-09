@@ -8,7 +8,8 @@
                   kernel,
                   stdlib,
                   backoff,
-                  jiffy
+                  jiffy,
+                  crypto
                  ]},
   {env, []},
   {maintainers, ["Erlang Solutions", "Heinz N. Gies"]},

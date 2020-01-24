@@ -10,7 +10,9 @@
                            port := lager_graylog:port_number(),
                            address_family := lager_graylog:address_family(),
                            formatter := module(),
-                           formatter_config := any()}.
+                           formatter_config := any(),
+                           transport := lager_graylog:transport(),
+                           extra_connect_opts := lager_graylog:extra_connect_opts()}.
 
 %% API
 
@@ -32,13 +34,17 @@ parse_common_opts(Opts) when is_list(Opts) ->
     AddressFamily   = proplists:get_value(address_family, Opts),
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
+    Transport = proplists:get_value(itransport, Opts, gen_tcp),
+    ExtraConnectOpts = proplists:get_value(extra_connect_opts, Opts, []),
 
     OptsWithDefaults = [{level, Level},
                         {host, Host},
                         {port, Port},
                         {address_family, AddressFamily},
                         {formatter, Formatter},
-                        {formatter_config, FormatterConfig}],
+                        {formatter_config, FormatterConfig},
+                        {transport, Transport},
+                        {extra_connect_opts, ExtraConnectOpts}],
     validate_config_values(OptsWithDefaults, #{}).
 
 %% Helpers
@@ -79,6 +85,9 @@ validate_config_value(level, L) ->
      end;
 validate_config_value(formatter, Formatter) when not is_atom(Formatter) ->
     {error, {invalid_formatter, Formatter}};
+validate_config_value(transport, Transport) when Transport =/= ssl,
+                                                 Transport =/= gen_tcp ->
+    {error, {invalid_transport, Transport}};
 validate_config_value(_, _) ->
     ok.
 

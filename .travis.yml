@@ -13,8 +13,7 @@ otp_release:
   - 19.3
 
 script:
-  - ./rebar3 ct
-  - ./rebar3 dialyzer
+  - ./rebar3 do ct, dialyzer
 
 notifications:
   email: mongoose-im@erlang-solutions.com

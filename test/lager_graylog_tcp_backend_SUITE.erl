@@ -7,13 +7,17 @@
 
 -define(HOST, {127, 0, 0, 1}).
 
+-type socket() :: gen_tcp:socket() | ssl:socket().
+
 %% Suite configuration
 
 all() ->
-    [{group, all}].
+    [{group, gen_tcp},
+     {group, ssl}].
 
 groups() ->
-    [{all, [], test_cases()}].
+    [{gen_tcp, [], test_cases()},
+     {ssl, [], test_cases()}].
 
 test_cases() ->
     [sends_log_messages_to_configured_endpoint,
@@ -23,20 +27,32 @@ test_cases() ->
 
 init_per_suite(Config) ->
     application:set_env(lager, error_logger_redirect, false),
+    {ok, Started} = application:ensure_all_started(ssl),
     lager:start(),
-    Config.
+    [{started, [lager | Started]} | Config].
 
-end_per_suite(_) ->
-    application:stop(lager).
+end_per_suite(Config) ->
+    StartedApps = ?config(started, Config),
+    lists:foreach(fun application:stop/1, lists:reverse(StartedApps)).
+
+init_per_group(Transport, Config) ->
+    [{transport, Transport} | Config].
+
+end_per_group(_Transport, _Config) ->
+    ok.
 
 init_per_testcase(_, Config) ->
-    {Socket, Port} = listen(),
-    start_lager_handler(Port),
-    RecvSocket = accept(Socket),
-    flush(RecvSocket),
+    Transport = ?config(transport, Config),
+    {Socket, Port} = listen(Transport),
+    start_lager_handler(Transport, Port),
+    RecvSocket = accept(Transport, Socket),
+    flush(Transport, RecvSocket),
     [{socket, Socket}, {recv_socket, RecvSocket}, {port, Port} | Config].
 
 end_per_testcase(_, Config) ->
+    Transport = ?config(transport, Config),
+    close(Transport, ?config(recv_socket, Config)),
+    close(Transport, ?config(socket, Config)),
     stop_lager_handler(?config(port, Config)).
 
 %% Test cases
@@ -45,7 +61,7 @@ sends_log_messages_to_configured_endpoint(Config) ->
     Log1 = log(info, "info log message"),
     Log2 = log(critical, "critical log message"),
 
-    Logs = flush(?config(recv_socket, Config)),
+    Logs = flush(?config(transport, Config), ?config(recv_socket, Config)),
     assert_logged(Logs, [Log1, Log2]).
 
 doesnt_log_over_configured_level(Config) ->
@@ -53,72 +69,109 @@ doesnt_log_over_configured_level(Config) ->
     ok = lager:set_loglevel(handler_id(?config(port, Config)), warning),
     Log2 = log(info, "log message 2"),
 
-    Logs = flush(?config(recv_socket, Config)),
+    Logs = flush(?config(transport, Config), ?config(recv_socket, Config)),
     assert_logged(Logs, [Log1]),
     assert_not_logged(Logs, [Log2]).
 
 drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
+    Transport = ?config(transport, Config),
+    Port = ?config(port, Config),
     RecvSocket1 = ?config(recv_socket, Config),
 
     Log1 = log(info, "log message 1"),
-    Logs1 = flush(RecvSocket1),
-    close(RecvSocket1),
+    Logs1 = flush(?config(transport, Config), RecvSocket1),
+    close(Transport, RecvSocket1),
+    % When the connection-closed, the backend tries to create a new connection.
+    % With TCP the new connection is pending on the server 'accept'-ing the connection.
+    % However with SSL, the connection seem to 'accepted' by the SSL stack.
+    %
+    % This difference leads to inconsistent test behaviour,
+    % where 'Log2' and 'Log3', being in the message-box of the backend,
+    % maybe logged once the new SSL connection is up.
+    %
+    % The log messages, on connection-close, from within backend add to the
+    % complexity of testing the reconnection behaviour.
+    %
+    % To get a consistent behaviour, the server has to be recreated here:
+    close(Transport, ?config(socket, Config)),
+    {ListenSocket, Port} = listen(Transport, Port),
+
     Log2 = log(info, "log message 2"),
     Log3 = log(info, "log message 3"),
 
-    RecvSocket2 = accept(?config(socket, Config)),
+    RecvSocket2 = accept(Transport, ListenSocket),
+
     Log4 = log(info, "log message 4"),
-    Logs2 = flush(RecvSocket2),
+    Logs2 = flush(Transport, RecvSocket2),
 
     Logs = Logs1 ++ Logs2,
     assert_logged(Logs, [Log1, Log4]),
-    assert_not_logged(Logs, [Log2, Log3]).
+    assert_not_logged(Logs, [Log2, Log3]),
+
+    close(Transport, ListenSocket).
 
 %% Helpers
 
--spec start_lager_handler(inet:port_number()) -> ok.
-start_lager_handler(Port) ->
-    Opts = [{host, ?HOST}, {port, Port}],
-    ok = gen_event:add_handler(lager_event, handler_id(Port), Opts).
+-spec start_lager_handler(lager_graylog:transport(), inet:port_number()) -> ok.
+start_lager_handler(Transport, Port) ->
+    Opts = [{host, ?HOST}, {port, Port},
+            {transport, Transport},
+            {extra_connect_opts, mk_opts(Transport, connect)}],
+    spawn(gen_event, add_handler, [lager_event, handler_id(Port), Opts]).
 
 -spec stop_lager_handler(inet:port_number()) -> ok.
 stop_lager_handler(Port) ->
     ok = gen_event:delete_handler(lager_event, handler_id(Port), []).
 
--spec listen() -> {gen_tcp:socket(), inet:port_number()}.
-listen() ->
-    {ok, Socket} = gen_tcp:listen(0, [binary,
-                                      {ip, ?HOST},
-                                      {active, false},
-                                      {reuseaddr, true}]),
-    {ok, Port} = inet:port(Socket),
+-spec listen(lager_graylog:transport()) -> {socket(), inet:port_number()}.
+listen(Transport) ->
+    listen(Transport, 0).
+
+listen(Transport, PortNo) ->
+    {ok, Socket} = Transport:listen(PortNo, [binary,
+                                           {ip, ?HOST},
+                                           {active, false},
+                                           {reuseaddr, true}
+                                           |mk_opts(Transport, listen)]),
+    SocketModule = case Transport of
+        gen_tcp -> inet;
+        _ -> Transport
+    end,
+    {ok, {_Addr, Port}} = SocketModule:sockname(Socket),
     {Socket, Port}.
 
--spec accept(gen_tcp:socket()) -> gen_tcp:socket().
-accept(Socket) ->
-    {ok, RecvSocket} = gen_tcp:accept(Socket, 1000),
+-spec accept(lager_graylog:transport(), socket()) -> socket().
+accept(gen_tcp, Socket) ->
+    accept(gen_tcp, accept, Socket);
+accept(ssl, Socket) ->
+    {ok, TlsSocket} = ssl:handshake(accept(ssl, transport_accept, Socket)),
+    TlsSocket.
+
+-spec accept(lager_graylog:transport(), accept | transport_accept, socket()) -> socket().
+accept(Transport, Accept, Socket) ->
+    {ok, RecvSocket} = Transport:Accept(Socket, 5000),
     RecvSocket.
 
--spec close(gen_tcp:socket()) -> ok.
-close(RecvSocket) ->
-    gen_tcp:close(RecvSocket).
+-spec close(lager_graylog:transport(), socket()) -> ok.
+close(Transport, RecvSocket) ->
+    Transport:close(RecvSocket).
 
--spec flush(gen_tcp:socket()) -> [map()].
-flush(RecvSocket) ->
-    Data = iolist_to_binary(recv(RecvSocket)),
+-spec flush(lager_graylog:transport(), socket()) -> [map()].
+flush(Transport, RecvSocket) ->
+    Data = iolist_to_binary(recv(Transport, RecvSocket)),
     Logs = binary:split(Data, <<0>>, [trim_all, global]),
     [jiffy:decode(Log, [return_maps]) || Log <- Logs].
 
--spec recv(gen_tcp:socket()) -> binary().
-recv(RecvSocket) ->
-    recv(RecvSocket, <<>>).
+-spec recv(lager_graylog:transport(), socket()) -> binary().
+recv(Transport, RecvSocket) ->
+    recv(Transport, RecvSocket, <<>>).
 
--spec recv(gen_tcp:socket(), iodata()) -> iodata().
-recv(RecvSocket, Acc) ->
-    case gen_tcp:recv(RecvSocket, 0, 100) of
+-spec recv(lager_graylog:transport(), socket(), iodata()) -> iodata().
+recv(Transport, RecvSocket, Acc) ->
+    case Transport:recv(RecvSocket, 0, 100) of
         {ok, Data} ->
             ct:pal("DATA: ~p", [Data]),
-            recv(RecvSocket, [Acc, Data]);
+            recv(Transport, RecvSocket, [Acc, Data]);
         {error, timeout} ->
             Acc
     end.
@@ -157,3 +210,18 @@ assert_not_logged(Logs, LogRefs) ->
             error({found_logs_but_shouldnt, [{log_refs, LogRefs}, {found_logs, FilteredLogs}]})
     end.
 
+mk_opts(gen_tcp, _) ->
+    [];
+mk_opts(ssl, listen) ->
+    mk_opts("server");
+mk_opts(ssl, connect) ->
+    mk_opts("client").
+
+mk_opts(Role) ->
+    Dir = filename:join([code:lib_dir(ssl), "examples", "certs", "etc"]),
+    [{verify, 2},
+     {depth, 2},
+     {server_name_indication, disable},
+     {cacertfile, filename:join([Dir, Role, "cacerts.pem"])},
+     {certfile, filename:join([Dir, Role, "cert.pem"])},
+     {keyfile, filename:join([Dir, Role, "key.pem"])}].

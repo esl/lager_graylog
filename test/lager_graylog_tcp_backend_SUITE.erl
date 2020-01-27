@@ -7,6 +7,27 @@
 
 -define(HOST, {127, 0, 0, 1}).
 
+-ifdef(OTP_RELEASE).
+-if(?OTP_RELEASE >= 22).
+-define(SSL_HANDSHAKE(TransportAccept), ssl:handshake(TransportAccept)).
+-elif(?OTP_RELEASE >= 21).
+-define(SSL_HANDSHAKE(TransportAccept),
+        begin
+            TransportSocket = TransportAccept,
+            ok = ssl:ssl_accept(TransportSocket),
+            {ok, TransportSocket}
+        end).
+-endif.
+-else.
+-define(SSL_HANDSHAKE(TransportAccept),
+        begin
+            TransportSocket = TransportAccept,
+            ok = ssl:ssl_accept(TransportSocket),
+            {ok, TransportSocket}
+        end).
+-endif.
+
+
 -type socket() :: gen_tcp:socket() | ssl:socket().
 
 %% Suite configuration
@@ -144,7 +165,7 @@ listen(Transport, PortNo) ->
 accept(gen_tcp, Socket) ->
     accept(gen_tcp, accept, Socket);
 accept(ssl, Socket) ->
-    {ok, TlsSocket} = ssl:handshake(accept(ssl, transport_accept, Socket)),
+    {ok, TlsSocket} = ?SSL_HANDSHAKE(accept(ssl, transport_accept, Socket)),
     TlsSocket.
 
 -spec accept(lager_graylog:transport(), accept | transport_accept, socket()) -> socket().

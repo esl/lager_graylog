@@ -68,6 +68,11 @@ handle_call({set_loglevel, Level}, State) ->
     end;
 handle_call(get_loglevel, #{level := Level} = State) ->
     {ok, Level, State};
+handle_call(get_socket_state, #{socket := {SocketState, _Socket}} = State) ->
+    lager:debug("Checking Connection state", []),
+    {ok, SocketState, State};
+handle_call(get_socket_state, #{socket := SocketState} = State) ->
+    {ok, SocketState, State};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 

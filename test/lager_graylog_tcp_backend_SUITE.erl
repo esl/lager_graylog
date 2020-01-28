@@ -115,9 +115,10 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
     Log3 = log(info, "log message 3"),
 
     RecvSocket2 = accept(Transport, ListenSocket),
-    timer:sleep(500),
-
+    timer:sleep(100),
     _TryConnectingLog = log(info, "Force Connection Retry"),
+    timer:sleep(100),
+
     Log4 = log(info, "log message 4"),
     Logs2 = flush(Transport, RecvSocket2),
 

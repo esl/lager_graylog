@@ -86,7 +86,7 @@ handle_event({log, Message}, #{name := Name,
                 ok ->
                     {ok, State};
                 {error, Reason} ->
-                    lager:error("Couldn't send log payload: ~p", [Reason]),
+                    lager:error("Couldn't send log payload due to: ~p", [Reason]),
                     {ok, try_connect(State#{socket := disconnected})}
             end;
         false ->
@@ -97,8 +97,13 @@ handle_event({log, _}, #{socket := disconnected} = State) ->
 handle_event(_, State) ->
     {ok, State}.
 
-handle_info({tcp_closed, _Socket}, #{socket := {connected, _Socket}} = State) ->
+handle_info({Closed, _Socket}, #{socket := {connected, _Socket}} = State)
+  when Closed == tcp_closed; Closed == ssl_closed ->
     lager:error("Connection closed", []),
+    {ok, try_connect(State#{socket := disconnected})};
+handle_info({Error, Reason, _Socket}, #{socket := {connected, _Socket}} = State)
+  when Error == tcp_error; Error == ssl_error ->
+    lager:error("Connection error: ~p", [Reason]),
     {ok, try_connect(State#{socket := disconnected})};
 handle_info({timeout, _, reconnect}, #{socket := disconnected} = State) ->
     {ok, try_connect(State)};
@@ -138,7 +143,13 @@ set_reconnection_timer(ReconnectInSeconds) ->
     erlang:start_timer(ReconnectInSeconds * 1000, self(), reconnect),
     ok.
 
--spec extra_connect_opts(lager_graylog:address_family(), [ssl:tls_option()]) -> extra_connect_opts().
-extra_connect_opts(undefined, ExtraConnectOpts) -> ExtraConnectOpts;
-extra_connect_opts(inet, ExtraConnectOpts) -> [inet | ExtraConnectOpts];
-extra_connect_opts(inet6, ExtraConnectOpts) -> [inet6 | ExtraConnectOpts].
+-spec extra_connect_opts(lager_graylog:address_family(), lager_graylog:extra_connect_opts()) -> extra_connect_opts().
+extra_connect_opts(undefined, ExtraConnectOpts) ->
+    [{keepalive, true},
+     {send_timeout, proplists:get_value(send_timeout, ExtraConnectOpts, 5000)},
+     {send_timeout_close, true} |
+     proplists:delete(send_timeout, ExtraConnectOpts)];
+extra_connect_opts(inet, ExtraConnectOpts) ->
+    [inet | extra_connect_opts(undefined, ExtraConnectOpts)];
+extra_connect_opts(inet6, ExtraConnectOpts) ->
+    [inet6 | extra_connect_opts(undefined, ExtraConnectOpts)].

@@ -34,7 +34,7 @@ parse_common_opts(Opts) when is_list(Opts) ->
     AddressFamily   = proplists:get_value(address_family, Opts),
     Formatter    = proplists:get_value(formatter, Opts, lager_graylog_gelf_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Opts, []),
-    Transport = proplists:get_value(itransport, Opts, gen_tcp),
+    Transport = proplists:get_value(transport, Opts, gen_tcp),
     ExtraConnectOpts = proplists:get_value(extra_connect_opts, Opts, []),
 
     OptsWithDefaults = [{level, Level},

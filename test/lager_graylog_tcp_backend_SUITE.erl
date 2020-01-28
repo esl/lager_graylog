@@ -86,12 +86,16 @@ doesnt_log_over_configured_level(Config) ->
     assert_not_logged(Logs, [Log2]).
 
 drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
+    % Setting the log-level to debug, so that these log event trigger
+    % the intrinsic Connection-Status check, see the 'get_socket_state' event.
+    ok = lager:set_loglevel(handler_id(?config(port, Config)), debug),
+
     Transport = ?config(transport, Config),
     Port = ?config(port, Config),
     RecvSocket1 = ?config(recv_socket, Config),
 
     Log1 = log(info, "log message 1"),
-    Logs1 = flush(?config(transport, Config), RecvSocket1),
+    Logs1 = flush(Transport, RecvSocket1),
     assert_logged(Logs1, [Log1]),
 
     close(Transport, RecvSocket1),
@@ -108,16 +112,15 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
     %
     % To get a consistent behaviour, the server has to be recreated here:
     close(Transport, ?config(socket, Config)),
-    timer:sleep(100),
+    disconnected = wait_for_socket_state(?config(port, Config), disconnected, 10, 1000),
+
     {ListenSocket, Port} = listen(Transport, Port),
 
     Log2 = log(info, "log message 2"),
     Log3 = log(info, "log message 3"),
 
     RecvSocket2 = accept(Transport, ListenSocket),
-    timer:sleep(100),
-    _TryConnectingLog = log(info, "Force Connection Retry"),
-    timer:sleep(100),
+    connected = wait_for_socket_state(?config(port, Config), connected, 10, 1000),
 
     Log4 = log(info, "log message 4"),
     Logs2 = flush(Transport, RecvSocket2),
@@ -130,11 +133,24 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
 
 %% Helpers
 
+wait_for_socket_state(_Port, _SocketState, _TimeIncrement, Timeout)
+  when Timeout =< 0 ->
+    timeout;
+wait_for_socket_state(Port, SocketState, TimeIncrement, Timeout) ->
+    case gen_event:call(lager_event, handler_id(Port), get_socket_state) of
+        SocketState ->
+            SocketState;
+        State when State == connected; State == disconnected ->
+            timer:sleep(TimeIncrement),
+            wait_for_socket_state(Port, SocketState, TimeIncrement, Timeout - TimeIncrement)
+    end.
+
 -spec start_lager_handler(lager_graylog:transport(), inet:port_number()) -> ok.
 start_lager_handler(Transport, Port) ->
     Opts = [{host, ?HOST}, {port, Port},
             {transport, Transport},
-            {extra_connect_opts, mk_opts(Transport, connect)}],
+            {extra_connect_opts, [{send_timeout, 500}
+                                  | mk_opts(Transport, connect)]}],
     spawn(gen_event, add_handler, [lager_event, handler_id(Port), Opts]).
 
 -spec stop_lager_handler(inet:port_number()) -> ok.

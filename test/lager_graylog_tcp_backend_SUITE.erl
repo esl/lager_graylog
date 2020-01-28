@@ -92,6 +92,8 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
 
     Log1 = log(info, "log message 1"),
     Logs1 = flush(?config(transport, Config), RecvSocket1),
+    assert_logged(Logs1, [Log1]),
+
     close(Transport, RecvSocket1),
     % When the connection-closed, the backend tries to create a new connection.
     % With TCP the new connection is pending on the server 'accept'-ing the connection.
@@ -113,7 +115,7 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
     Log3 = log(info, "log message 3"),
 
     RecvSocket2 = accept(Transport, ListenSocket),
-    timer:sleep(100),
+    timer:sleep(500),
 
     Log4 = log(info, "log message 4"),
     Logs2 = flush(Transport, RecvSocket2),

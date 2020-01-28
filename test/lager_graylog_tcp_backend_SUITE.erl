@@ -8,16 +8,7 @@
 -define(HOST, {127, 0, 0, 1}).
 
 -ifdef(OTP_RELEASE).
--if(?OTP_RELEASE >= 22).
 -define(SSL_HANDSHAKE(TransportAccept), ssl:handshake(TransportAccept)).
--elif(?OTP_RELEASE >= 21).
--define(SSL_HANDSHAKE(TransportAccept),
-        begin
-            TransportSocket = TransportAccept,
-            ok = ssl:ssl_accept(TransportSocket),
-            {ok, TransportSocket}
-        end).
--endif.
 -else.
 -define(SSL_HANDSHAKE(TransportAccept),
         begin
@@ -115,6 +106,7 @@ drops_log_messages_if_there_is_no_connection_and_reconnects_later(Config) ->
     %
     % To get a consistent behaviour, the server has to be recreated here:
     close(Transport, ?config(socket, Config)),
+    timer:sleep(100),
     {ListenSocket, Port} = listen(Transport, Port),
 
     Log2 = log(info, "log message 2"),

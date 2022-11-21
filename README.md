@@ -76,7 +76,7 @@ If you care more about speed than reliability of delivery, you can use UDP-based
 To use it, just declare it in your lager config:
 
 ```erlang
-[{lager, [{handlers, [{lager_graylog_tcp_backend, [{host, "graylog-hostname"},
+[{lager, [{handlers, [{lager_graylog_udp_backend, [{host, "graylog-hostname"},
                                                    {port, 12201}]
 
 }]}]}].
